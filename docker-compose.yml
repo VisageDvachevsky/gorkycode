@@ -18,6 +18,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - aitourist-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aitourist-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aitourist-network
 
   backend:
     build:
@@ -26,13 +43,16 @@ services:
     container_name: aitourist-api
     environment:
       DATABASE_URL: postgresql://aitourist:dev_password_change_in_prod@db:5432/aitourist_db
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       REDIS_URL: redis://redis:6379/0
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-20250514}
       ENVIRONMENT: development
     volumes:
       - ./backend:/app
       - ./data:/app/data
+      - backend_cache:/app/.venv
     ports:
       - "8000:8000"
     depends_on:
@@ -40,18 +60,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - aitourist-network
+    restart: unless-stopped
     command: poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  redis:
-    image: redis:7-alpine
-    container_name: aitourist-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   frontend:
     build:
@@ -68,7 +80,16 @@ services:
       - "5173:5173"
     depends_on:
       - backend
-    command: npm run dev
+    networks:
+      - aitourist-network
+    restart: unless-stopped
+    command: npm run dev -- --host 0.0.0.0
+
+networks:
+  aitourist-network:
+    driver: bridge
 
 volumes:
   postgres_data:
+  redis_data:
+  backend_cache:

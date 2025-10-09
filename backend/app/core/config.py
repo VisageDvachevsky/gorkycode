@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    LLM_PROVIDER: str = "openai"
-    LLM_MODEL: str = "..."
+    LLM_PROVIDER: str = "anthropic"
+    LLM_MODEL: str = "claude-sonnet-4-20250514"
     
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
     

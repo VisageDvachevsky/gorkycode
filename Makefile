@@ -1,58 +1,103 @@
-.PHONY: help up down build rebuild logs clean install-backend install-frontend test lint format
+DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null)
+ifndef DOCKER_COMPOSE
+	DOCKER_COMPOSE := docker compose
+else
+	DOCKER_COMPOSE := docker-compose
+endif
+
+.PHONY: help up down build rebuild logs clean install test lint format check
 
 help:
 	@echo "AI-Tourist Development Commands:"
+	@echo ""
 	@echo "  make up              - Start all services"
 	@echo "  make down            - Stop all services"
 	@echo "  make build           - Build all containers"
 	@echo "  make rebuild         - Rebuild and restart"
 	@echo "  make logs            - Show logs (all services)"
+	@echo "  make logs-api        - Show backend logs"
+	@echo "  make logs-frontend   - Show frontend logs"
 	@echo "  make clean           - Remove volumes and containers"
-	@echo "  make install-backend - Install backend dependencies"
-	@echo "  make install-frontend- Install frontend dependencies"
+	@echo "  make install         - Install all dependencies"
 	@echo "  make test            - Run tests"
 	@echo "  make lint            - Run linters"
 	@echo "  make format          - Format code"
+	@echo "  make check           - Run system check"
+	@echo "  make load-data       - Load POI data into database"
 
 up:
-	docker-compose up -d
+	$(DOCKER_COMPOSE) up -d
 
 down:
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 
 build:
-	docker-compose build
+	$(DOCKER_COMPOSE) build --no-cache
 
-rebuild: down build up
+rebuild: down
+	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) up -d
+	@echo ""
+	@echo "✅ Services rebuilt and started"
+	@echo "Backend API: http://localhost:8000"
+	@echo "Frontend: http://localhost:5173"
+	@echo "Docs: http://localhost:8000/docs"
 
 logs:
-	docker-compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 logs-api:
-	docker-compose logs -f backend
+	$(DOCKER_COMPOSE) logs -f backend
 
 logs-frontend:
-	docker-compose logs -f frontend
+	$(DOCKER_COMPOSE) logs -f frontend
+
+logs-db:
+	$(DOCKER_COMPOSE) logs -f db
 
 clean:
-	docker compose down -v
-	rm -rf backend/__pycache__
-	rm -rf backend/.pytest_cache
-	find backend -type d -name "__pycache__" -exec rm -r {} +
+	$(DOCKER_COMPOSE) down -v --remove-orphans
+	docker system prune -f
+	@echo "✅ Cleaned up containers, volumes, and orphaned resources"
 
-install-backend:
-	cd backend && poetry install
-
-install-frontend:
-	cd frontend && npm install
+install:
+	@echo "Installing backend dependencies..."
+	$(DOCKER_COMPOSE) exec backend poetry install
+	@echo "Installing frontend dependencies..."
+	$(DOCKER_COMPOSE) exec frontend npm install
+	@echo "✅ All dependencies installed"
 
 test:
-	docker compose exec backend poetry run pytest
+	$(DOCKER_COMPOSE) exec backend poetry run pytest -v
 
 lint:
-	docker compose exec backend poetry run ruff check app/
-	docker compose exec backend poetry run mypy app/
+	@echo "Running backend linters..."
+	$(DOCKER_COMPOSE) exec backend poetry run ruff check app/
+	$(DOCKER_COMPOSE) exec backend poetry run mypy app/
 
 format:
-	docker compose exec backend poetry run black app/
-	docker compose exec backend poetry run isort app/
+	@echo "Formatting backend code..."
+	$(DOCKER_COMPOSE) exec backend poetry run black app/
+	$(DOCKER_COMPOSE) exec backend poetry run isort app/
+	@echo "✅ Code formatted"
+
+check:
+	$(DOCKER_COMPOSE) exec backend poetry run python scripts/check_system.py
+
+load-data:
+	$(DOCKER_COMPOSE) exec backend poetry run python scripts/load_pois.py
+
+shell-backend:
+	$(DOCKER_COMPOSE) exec backend /bin/bash
+
+shell-frontend:
+	$(DOCKER_COMPOSE) exec frontend /bin/sh
+
+shell-db:
+	$(DOCKER_COMPOSE) exec db psql -U aitourist -d aitourist_db
+
+restart-backend:
+	$(DOCKER_COMPOSE) restart backend
+
+restart-frontend:
+	$(DOCKER_COMPOSE) restart frontend

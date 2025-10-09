@@ -3,15 +3,16 @@ FROM node:20-alpine as base
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
-
-COPY . .
 
 FROM base as development
+RUN npm ci
+COPY . .
 EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 FROM base as builder
+RUN npm ci
+COPY . .
 RUN npm run build
 
 FROM nginx:alpine as production

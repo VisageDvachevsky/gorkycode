@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    POETRY_VERSION=2.2.1 \
+    POETRY_VERSION=1.7.1 \
     POETRY_HOME="/opt/poetry" \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1
@@ -19,8 +19,6 @@ RUN curl -sSL https://install.python-poetry.org | python3 - --version ${POETRY_V
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
 WORKDIR /app
-
-RUN poetry lock
 
 COPY pyproject.toml poetry.lock* ./
 
