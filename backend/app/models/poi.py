@@ -16,6 +16,8 @@ class POI(Base):
     lat: Mapped[float] = mapped_column(Float, nullable=False)
     lon: Mapped[float] = mapped_column(Float, nullable=False)
     
+    address: Mapped[Optional[str]] = mapped_column(String(500))  
+    
     category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     tags: Mapped[List[str]] = mapped_column(JSON, default=list)
     

@@ -11,7 +11,23 @@ async def load_pois():
     await init_db()
     await embedding_service.connect_redis()
     
-    data_path = Path(__file__).parent.parent.parent / "data" / "poi.json"
+    possible_paths = [
+        Path("/app/data/poi.json"),
+        Path(__file__).parent.parent.parent / "data" / "poi.json",
+    ]
+    
+    data_path = None
+    for path in possible_paths:
+        if path.exists():
+            data_path = path
+            break
+    
+    if not data_path:
+        print("❌ Error: poi.json not found in any expected location")
+        print("Tried:", [str(p) for p in possible_paths])
+        return
+    
+    print(f"📂 Loading POI data from: {data_path}")
     
     with open(data_path, "r", encoding="utf-8") as f:
         pois_data = json.load(f)
@@ -23,7 +39,8 @@ async def load_pois():
         for poi_data in pois_data:
             poi_id = poi_data["id"]
             
-            embedding_text = f"{poi_data['name']} {poi_data['description']} {' '.join(poi_data['tags'])}"
+            # Создаём текст для эмбеддинга
+            embedding_text = f"{poi_data['name']} {poi_data['description']} {' '.join(poi_data.get('tags', []))}"
             embedding = embedding_service.generate_embedding(embedding_text)
             
             if poi_id in existing_pois:
@@ -32,14 +49,14 @@ async def load_pois():
                     if key != "id":
                         setattr(poi, key, value)
                 poi.embedding = embedding
-                print(f"Updated POI: {poi.name}")
+                print(f"✓ Updated POI: {poi.name}")
             else:
                 poi = POI(**poi_data, embedding=embedding)
                 session.add(poi)
-                print(f"Added POI: {poi.name}")
+                print(f"✓ Added POI: {poi.name}")
         
         await session.commit()
-        print(f"\nLoaded {len(pois_data)} POIs successfully")
+        print(f"\n✅ Loaded {len(pois_data)} POIs successfully")
 
 
 if __name__ == "__main__":
