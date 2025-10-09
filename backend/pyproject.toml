@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "AI-powered tourist guide for Nizhny Novgorod"
 authors = ["VisageDvachevsky"]
 readme = "README.md"
+packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
