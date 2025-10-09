@@ -20,11 +20,12 @@ ENV PATH="$POETRY_HOME/bin:$PATH"
 
 WORKDIR /app
 
+RUN poetry lock
+
 COPY pyproject.toml poetry.lock* ./
 
 RUN poetry install --no-root --no-interaction --no-ansi
 
-# Copy the rest of the application
 COPY . .
 
 EXPOSE 8000
