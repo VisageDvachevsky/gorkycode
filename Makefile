@@ -1,11 +1,9 @@
-DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null)
-ifndef DOCKER_COMPOSE
-	DOCKER_COMPOSE := docker compose
-else
-	DOCKER_COMPOSE := docker-compose
-endif
+DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
-.PHONY: help up down build rebuild logs clean install test lint format check
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+
+.PHONY: help up down build rebuild logs clean install test lint format check shell-backend shell-frontend shell-db restart-backend restart-frontend load-data
 
 help:
 	@echo "AI-Tourist Development Commands:"
@@ -32,10 +30,10 @@ down:
 	$(DOCKER_COMPOSE) down
 
 build:
-	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) build --progress=plain
 
 rebuild: down
-	$(DOCKER_COMPOSE) build --no-cache
+	$(DOCKER_COMPOSE) build
 	$(DOCKER_COMPOSE) up -d
 	@echo ""
 	@echo "✅ Services rebuilt and started"
@@ -62,9 +60,9 @@ clean:
 
 install:
 	@echo "Installing backend dependencies..."
-	$(DOCKER_COMPOSE) exec backend poetry install
+	$(DOCKER_COMPOSE) run --rm backend poetry install
 	@echo "Installing frontend dependencies..."
-	$(DOCKER_COMPOSE) exec frontend npm install
+	$(DOCKER_COMPOSE) run --rm frontend npm install
 	@echo "✅ All dependencies installed"
 
 test:
