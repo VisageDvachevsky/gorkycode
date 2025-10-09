@@ -46,7 +46,7 @@
 
 ```bash
 git clone https://github.com/VisageDvachevsky/gorkycode
-cd ai-tourist
+cd gorkycode
 ```
 
 2. **Настроить окружение**
