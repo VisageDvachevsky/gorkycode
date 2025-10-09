@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 2.2.1
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
 WORKDIR /app
