@@ -1,0 +1,101 @@
+[
+  {
+    "_comment": "=== ОБЯЗАТЕЛЬНЫЕ ПОЛЯ ===",
+    
+    "id": 1,
+    "_id_note": "Уникальный номер, начиная с 1",
+    
+    "name": "Название места на русском",
+    "name_en": "Optional English name",
+    
+    "lat": 56.326900,
+    "_lat_note": "Широта, формат: 56.xxxxx (Нижний Новгород: 56.29-56.36)",
+    
+    "lon": 44.002000,
+    "_lon_note": "Долгота, формат: 44.xxxxx (Нижний Новгород: 43.85-44.10)",
+    
+    "category": "museum",
+    "_category_options": "museum|cafe|viewpoint|park|streetart|architecture|bar|streetfood|shopping|entertainment",
+    
+    "tags": [
+      "история",
+      "фотография",
+      "панорама"
+    ],
+    "_tags_note": "Минимум 3-5 тегов на русском, конкретные и релевантные",
+    
+    "description": "Подробное описание места минимум 2-3 предложения. ЧТО здесь есть, ЧЕМ интересно, ПОЧЕМУ стоит посетить.",
+    "_description_note": "Живой язык, конкретные детали, избегать шаблонов",
+    
+    "_comment2": "=== ЖЕЛАТЕЛЬНЫЕ ПОЛЯ ===",
+    
+    "description_en": "English description if available",
+    
+    "photo_tip": "Совет для фотографии: откуда снимать, когда, какой ракурс",
+    "_photo_tip_note": "Конкретика: 'снимайте от входа', 'лучше на закате', 'используйте wide angle'",
+    
+    "local_tip": "Лайфхак от местных: что знают только жители города",
+    "_local_tip_note": "Секреты, особенности, малоизвестные факты",
+    
+    "avg_visit_minutes": 30,
+    "_avg_visit_minutes_note": "Среднее время на осмотр: кафе=30, музей=60-90, смотровая=15-20",
+    
+    "open_time": "10:00",
+    "close_time": "22:00",
+    "_hours_note": "Формат HH:MM, null если работает 24/7 или нет расписания",
+    
+    "social_mode": "solo",
+    "_social_mode_options": "solo|friends|family|any",
+    "_social_mode_note": "solo=тихие места, friends=бары/активности, family=семейные",
+    
+    "intensity_level": "medium",
+    "_intensity_options": "relaxed|medium|intense",
+    "_intensity_note": "relaxed=парки/кафе, medium=музеи, intense=активности/походы",
+    
+    "rating": 4.5,
+    "_rating_note": "От 0.0 до 5.0, можно брать из 2GIS/TripAdvisor",
+    
+    "_comment3": "=== ОПЦИОНАЛЬНЫЕ ПОЛЯ ===",
+    
+    "price_level": "medium",
+    "_price_level_options": "free|cheap|medium|expensive",
+    
+    "indoor": true,
+    "_indoor_note": "true=внутри помещения, false=на улице",
+    
+    "accessibility": "wheelchair_accessible",
+    "_accessibility_options": "wheelchair_accessible|stairs_only|partial_access",
+    
+    "website": "https://example.com",
+    "phone": "+7 (831) 123-45-67",
+    
+    "best_time_of_day": ["morning", "evening"],
+    "_best_time_options": "morning|afternoon|evening|night",
+    
+    "best_season": ["summer", "autumn"],
+    "_best_season_options": "spring|summer|autumn|winter",
+    
+    "weather_dependency": "outdoor",
+    "_weather_dependency_options": "indoor|outdoor|any",
+    
+    "parking_available": true,
+    "bike_friendly": true,
+    
+    "instagram_tag": "#kremlinnn"
+  },
+  {
+    "_comment": "=== ПРИМЕР 2: МИНИМАЛЬНАЯ ЗАПИСЬ ===",
+    
+    "id": 2,
+    "name": "Парк Кулибина",
+    "lat": 56.296500,
+    "lon": 43.935800,
+    "category": "park",
+    "tags": ["прогулки", "природа", "семья", "дети"],
+    "description": "Большой зеленый парк на берегу Оки. Есть детские площадки, прокат велосипедов, беговые дорожки. Хорошее место для пикника или пробежки.",
+    "avg_visit_minutes": 45,
+    "social_mode": "family",
+    "intensity_level": "relaxed",
+    "rating": 4.3
+  }
+]
