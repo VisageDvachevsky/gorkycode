@@ -32,7 +32,9 @@ OPTIONAL_FIELDS = {
 
 VALID_CATEGORIES = {
     "museum", "cafe", "viewpoint", "park", "streetart", 
-    "architecture", "bar", "streetfood", "shopping", "entertainment"
+    "architecture", "bar", "streetfood", "shopping", "entertainment",
+    "monument", "memorial", "religious_site", "decorative_art", 
+    "mosaic", "art_object", "sculpture"
 }
 
 VALID_SOCIAL_MODES = {"solo", "friends", "family", "any"}
@@ -54,7 +56,7 @@ class POIValidator:
         }
     
     def validate_file(self, filepath: Path) -> bool:
-        print(f"Validating: {filepath}\n")
+        print(f"🔍 Validating: {filepath}\n")
         
         try:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -155,7 +157,7 @@ class POIValidator:
     
     def _print_results(self) -> None:
         print("=" * 60)
-        print("VALIDATION RESULTS\n")
+        print("📊 VALIDATION RESULTS\n")
         
         print(f"Total POIs: {self.stats['total']}")
         print(f"Valid POIs: {self.stats['valid']}")
@@ -177,27 +179,27 @@ class POIValidator:
             print(f"  Avg description length: {avg_desc:.0f} chars")
         
         if self.errors:
-            print(f"\nERRORS ({len(self.errors)}):")
+            print(f"\n❌ ERRORS ({len(self.errors)}):")
             for error in self.errors[:10]:
-                print(f"   {error}")
+                print(f"  • {error}")
             if len(self.errors) > 10:
                 print(f"  ... and {len(self.errors) - 10} more")
         
         if self.warnings:
-            print(f"\n  WARNINGS ({len(self.warnings)}):")
+            print(f"\n⚠️  WARNINGS ({len(self.warnings)}):")
             for warning in self.warnings[:10]:
-                print(f"   {warning}")
+                print(f"  • {warning}")
             if len(self.warnings) > 10:
                 print(f"  ... and {len(self.warnings) - 10} more")
         
         print("\n" + "=" * 60)
         
         if len(self.errors) == 0:
-            print(" Validation passed!")
+            print("✅ Validation passed!")
             if len(self.warnings) > 0:
-                print(f"But there are {len(self.warnings)} warnings to review")
+                print(f"⚠️  But there are {len(self.warnings)} warnings to review")
         else:
-            print("Validation failed! Fix errors and try again.")
+            print("❌ Validation failed! Fix errors and try again.")
 
 
 def main():

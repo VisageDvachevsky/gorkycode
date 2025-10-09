@@ -15,24 +15,24 @@ help:
 	@echo "  make format          - Format code"
 
 up:
-	docker compose up -d
+	docker-compose up -d
 
 down:
-	docker compose down
+	docker-compose down
 
 build:
-	docker compose build
+	docker-compose build
 
 rebuild: down build up
 
 logs:
-	docker compose logs -f
+	docker-compose logs -f
 
 logs-api:
-	docker compose logs -f backend
+	docker-compose logs -f backend
 
 logs-frontend:
-	docker compose logs -f frontend
+	docker-compose logs -f frontend
 
 clean:
 	docker compose down -v

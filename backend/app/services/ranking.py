@@ -8,15 +8,35 @@ from app.services.embedding import embedding_service
 
 class RankingService:
     SOCIAL_MODE_WEIGHTS = {
-        "solo": {"viewpoint": 1.2, "museum": 1.1, "park": 1.15, "cafe": 0.9},
-        "friends": {"bar": 1.3, "streetfood": 1.2, "park": 1.1, "museum": 0.9},
-        "family": {"park": 1.3, "museum": 1.2, "cafe": 1.1, "viewpoint": 1.0},
+        "solo": {
+            "viewpoint": 1.2, "museum": 1.1, "park": 1.15, "cafe": 0.9, 
+            "monument": 1.1, "memorial": 1.1, "religious_site": 1.15,
+            "decorative_art": 1.1, "mosaic": 1.1, "art_object": 1.1,
+            "architecture": 1.15, "sculpture": 1.1
+        },
+        "friends": {
+            "bar": 1.3, "streetfood": 1.2, "park": 1.1, "museum": 0.9, 
+            "monument": 1.0, "memorial": 1.0, "cafe": 1.1,
+            "decorative_art": 1.0, "art_object": 1.0
+        },
+        "family": {
+            "park": 1.3, "museum": 1.2, "cafe": 1.1, "viewpoint": 1.0, 
+            "monument": 1.1, "memorial": 1.05, "religious_site": 1.1,
+            "decorative_art": 1.15
+        },
     }
     
     INTENSITY_WEIGHTS = {
-        "relaxed": {"park": 1.2, "cafe": 1.2, "viewpoint": 1.1},
+        "relaxed": {
+            "park": 1.2, "cafe": 1.2, "viewpoint": 1.1, "monument": 1.15,
+            "memorial": 1.15, "religious_site": 1.2, "decorative_art": 1.1,
+            "mosaic": 1.1
+        },
         "medium": {},
-        "intense": {"museum": 1.2, "streetart": 1.3, "architecture": 1.2},
+        "intense": {
+            "museum": 1.2, "streetart": 1.3, "architecture": 1.2,
+            "art_object": 1.2, "sculpture": 1.1
+        },
     }
     
     async def rank_pois(

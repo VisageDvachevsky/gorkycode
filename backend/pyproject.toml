@@ -2,7 +2,7 @@
 name = "aitourist-backend"
 version = "0.1.0"
 description = "AI-powered tourist guide for Nizhny Novgorod"
-authors = ["AI-Tourist Team"]
+authors = ["VisageDvachevsky"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
