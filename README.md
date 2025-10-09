@@ -45,7 +45,7 @@
 1. **Клонировать репозиторий**
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/VisageDvachevsky/gorkycode
 cd ai-tourist
 ```
 
