@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,8 +46,14 @@ class RankingService:
         social_mode: str,
         intensity: str,
         top_k: int = 20,
+        categories_filter: Optional[List[str]] = None,
     ) -> List[Tuple[POI, float]]:
-        result = await session.execute(select(POI))
+        query = select(POI)
+        
+        if categories_filter:
+            query = query.where(POI.category.in_(categories_filter))
+        
+        result = await session.execute(query)
         all_pois = result.scalars().all()
         
         scored_pois: List[Tuple[POI, float]] = []

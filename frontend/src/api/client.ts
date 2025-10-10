@@ -15,6 +15,10 @@ export const api = {
     const { data } = await client.post<RouteResponse>('/route/plan', request)
     return data
   },
+  async getCategories(): Promise<Category[]> {
+  const { data } = await client.get<Category[]>('/categories/list')
+  return data
+}
 }
 
 export default client

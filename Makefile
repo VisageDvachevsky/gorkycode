@@ -125,6 +125,12 @@ reset-db: down
 	@$(MAKE) load-data
 	@echo "✅ Database reset complete"
 
+update-deps:
+	@echo "📦 Updating backend dependencies..."
+	$(DOCKER_COMPOSE) exec backend poetry install
+	@echo "✅ Dependencies updated"
+	$(DOCKER_COMPOSE) restart backend
+
 shell-backend:
 	$(DOCKER_COMPOSE) exec backend /bin/bash
 

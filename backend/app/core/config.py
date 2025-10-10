@@ -13,12 +13,15 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI-Tourist API"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
+
+    ENVIRONMENT: str = "development"
     
     DATABASE_URL: PostgresDsn
     REDIS_URL: str = "redis://redis:6379/0"
     
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
+    OPENROUTESERVICE_API_KEY: str | None = None
     
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     LLM_PROVIDER: str = "anthropic"
@@ -26,7 +29,14 @@ class Settings(BaseSettings):
     
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
     
+    
     CACHE_TTL_SECONDS: int = 3600
+    GEOCODING_CACHE_TTL_SECONDS: int = 86400
+    ROUTING_CACHE_TTL_SECONDS: int = 3600
+
+    MAX_RETRIES: int = 3
+    REQUEST_TIMEOUT: int = 30
+
     DEFAULT_WALK_SPEED_KMH: float = 4.5
     
     @field_validator("CORS_ORIGINS", mode="before")

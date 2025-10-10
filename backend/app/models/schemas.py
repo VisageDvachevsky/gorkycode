@@ -4,10 +4,12 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class RouteRequest(BaseModel):
-    interests: str = Field(..., description="Free-form text: street-art, panoramas, coffee, history")
+    interests: str = Field(default="", description="Free-form text: street-art, panoramas, coffee, history")
+    categories: Optional[List[str]] = Field(default=None, description="Specific POI categories to include")
     hours: float = Field(..., ge=0.5, le=12, description="Available hours for the walk")
-    start_lat: float = Field(..., ge=-90, le=90)
-    start_lon: float = Field(..., ge=-180, le=180)
+    start_lat: Optional[float] = Field(default=None, ge=-90, le=90)
+    start_lon: Optional[float] = Field(default=None, ge=-180, le=180)
+    start_address: Optional[str] = Field(default=None, description="Starting address (alternative to coordinates)")
     social_mode: str = Field(default="solo", pattern="^(solo|friends|family)$")
     coffee_preference: Optional[int] = Field(
         default=None, 
@@ -39,6 +41,7 @@ class RouteResponse(BaseModel):
     total_distance_km: float
     notes: List[str] = []
     atmospheric_description: Optional[str] = None
+    route_geometry: Optional[List[List[float]]] = None
 
 
 class EmbeddingRequest(BaseModel):

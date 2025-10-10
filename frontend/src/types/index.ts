@@ -1,8 +1,10 @@
 export interface RouteRequest {
   interests: string
+  categories?: string[]
   hours: number
-  start_lat: number
-  start_lon: number
+  start_lat?: number
+  start_lon?: number
+  start_address?: string
   social_mode: 'solo' | 'friends' | 'family'
   coffee_preference?: number
   intensity: 'relaxed' | 'medium' | 'intense'
@@ -29,4 +31,11 @@ export interface RouteResponse {
   total_distance_km: number
   notes: string[]
   atmospheric_description?: string
+  route_geometry?: number[][]
+}
+
+export interface Category {
+  value: string
+  label: string
+  count: number
 }
