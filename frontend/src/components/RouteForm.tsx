@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { api } from '../api/client'
-import type { RouteRequest, RouteResponse, Category } from '../types'
+import type { RouteRequest, RouteResponse, Category, CoffeePreferences } from '../types'
 import 'leaflet/dist/leaflet.css'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -39,12 +39,22 @@ export default function RouteForm({ onRouteGenerated }: Props) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [validationError, setValidationError] = useState<string | null>(null)
   const [formProgress, setFormProgress] = useState(0)
+  const [showCoffeeAdvanced, setShowCoffeeAdvanced] = useState(false)
   
   const [formData, setFormData] = useState<RouteRequest>({
     interests: '',
     hours: 3,
     social_mode: 'solo',
     intensity: 'medium',
+    allow_transit: true,
+  })
+
+  const [coffeePrefs, setCoffeePrefs] = useState<CoffeePreferences>({
+    enabled: false,
+    interval_minutes: 90,
+    outdoor_seating: false,
+    wifi: false,
+    search_radius_km: 0.5,
   })
 
   const { data: categories = [], isLoading: categoriesLoading } = useQuery({
@@ -59,15 +69,14 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     },
   })
 
-  // Calculate form completion progress
   useEffect(() => {
     let progress = 0
-    const steps = 4 // Total required steps
+    const steps = 4
     
     if (formData.interests.trim() || selectedCategories.length > 0) progress += 25
     if (formData.hours) progress += 25
     if (locationType === 'address' ? formData.start_address : (formData.start_lat && formData.start_lon)) progress += 25
-    progress += 25 // Social mode and intensity always have defaults
+    progress += 25
     
     setFormProgress(progress)
   }, [formData, selectedCategories, locationType])
@@ -103,6 +112,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     const requestData: RouteRequest = {
       ...formData,
       categories: selectedCategories.length > 0 ? selectedCategories : undefined,
+      coffee_preferences: coffeePrefs.enabled ? coffeePrefs : undefined,
     }
     
     if (locationType === 'address') {
@@ -125,7 +135,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
 
   return (
     <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6 animate-fadeIn">
-      {/* Header with progress */}
       <div className="border-b pb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -140,7 +149,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           </div>
         </div>
         
-        {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
           <div 
             className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-500 ease-out"
@@ -170,11 +178,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
               <span>Интересы указаны</span>
             </div>
           )}
-          
-          <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-            <span>💡</span>
-            <span>Можно оставить пустым, если выбрали категории ниже</span>
-          </p>
         </div>
 
         {/* Categories */}
@@ -206,23 +209,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
                 </button>
               ))}
             </div>
-          )}
-          
-          {selectedCategories.length > 0 && (
-            <>
-              <div className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg mt-3 flex items-center gap-2 animate-slideInLeft">
-                <span>✓</span>
-                <span>Выбрано категорий: {selectedCategories.length}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedCategories([])}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 transition-colors"
-              >
-                <span>↺</span>
-                <span>Сбросить выбор</span>
-              </button>
-            </>
           )}
         </div>
 
@@ -372,46 +358,128 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </div>
 
-        {/* Coffee breaks */}
+        {/* Smart Coffee Breaks */}
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 animate-slideInLeft" style={{ animationDelay: '500ms' }}>
           <label className="flex items-center space-x-3 cursor-pointer">
             <input
               type="checkbox"
-              checked={formData.coffee_preference !== undefined}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setFormData({ ...formData, coffee_preference: 90 })
-                } else {
-                  const { coffee_preference, ...rest } = formData
-                  setFormData(rest)
-                }
-              }}
+              checked={coffeePrefs.enabled}
+              onChange={(e) => setCoffeePrefs({ ...coffeePrefs, enabled: e.target.checked })}
               className="w-6 h-6 rounded-lg text-amber-600 focus:ring-amber-500 transition-all"
             />
             <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <span className="text-2xl">☕</span>
-              Добавить кофе-брейки
+              Умные кофе-брейки (через OSM)
             </span>
           </label>
           
-          {formData.coffee_preference !== undefined && (
-            <div className="mt-4 animate-fadeIn">
-              <input
-                type="range"
-                value={formData.coffee_preference}
-                onChange={(e) => setFormData({ ...formData, coffee_preference: parseInt(e.target.value) })}
-                min="30"
-                max="180"
-                step="15"
-                className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-              />
-              <div className="flex justify-between text-xs text-gray-700 mt-2 font-medium">
-                <span>30 мин</span>
-                <span className="text-lg font-bold text-amber-700">{formData.coffee_preference} минут</span>
-                <span>180 мин</span>
+          {coffeePrefs.enabled && (
+            <div className="mt-4 space-y-4 animate-fadeIn">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-2 block">Интервал</label>
+                <input
+                  type="range"
+                  value={coffeePrefs.interval_minutes}
+                  onChange={(e) => setCoffeePrefs({ ...coffeePrefs, interval_minutes: parseInt(e.target.value) })}
+                  min="30"
+                  max="180"
+                  step="15"
+                  className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                />
+                <div className="flex justify-between text-xs text-gray-700 mt-2 font-medium">
+                  <span>30 мин</span>
+                  <span className="text-lg font-bold text-amber-700">{coffeePrefs.interval_minutes} минут</span>
+                  <span>180 мин</span>
+                </div>
               </div>
+              
+              <button
+                type="button"
+                onClick={() => setShowCoffeeAdvanced(!showCoffeeAdvanced)}
+                className="text-sm text-amber-700 font-medium hover:text-amber-800 flex items-center gap-2"
+              >
+                <span>{showCoffeeAdvanced ? '▼' : '▶'}</span>
+                Дополнительные настройки
+              </button>
+              
+              {showCoffeeAdvanced && (
+                <div className="space-y-3 animate-fadeIn">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1 block">Кухня</label>
+                      <select
+                        value={coffeePrefs.cuisine || ''}
+                        onChange={(e) => setCoffeePrefs({ ...coffeePrefs, cuisine: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                      >
+                        <option value="">Любая</option>
+                        <option value="italian">Итальянская</option>
+                        <option value="french">Французская</option>
+                        <option value="japanese">Японская</option>
+                        <option value="asian">Азиатская</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs font-medium text-gray-700 mb-1 block">Диета</label>
+                      <select
+                        value={coffeePrefs.dietary || ''}
+                        onChange={(e) => setCoffeePrefs({ ...coffeePrefs, dietary: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm"
+                      >
+                        <option value="">Без ограничений</option>
+                        <option value="vegetarian">Вегетарианская</option>
+                        <option value="vegan">Веганская</option>
+                        <option value="halal">Халяль</option>
+                        <option value="kosher">Кошерная</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-4">
+                    <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={coffeePrefs.outdoor_seating}
+                        onChange={(e) => setCoffeePrefs({ ...coffeePrefs, outdoor_seating: e.target.checked })}
+                        className="rounded text-amber-600"
+                      />
+                      <span>🪑 Терраса</span>
+                    </label>
+                    
+                    <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={coffeePrefs.wifi}
+                        onChange={(e) => setCoffeePrefs({ ...coffeePrefs, wifi: e.target.checked })}
+                        className="rounded text-amber-600"
+                      />
+                      <span>📶 Wi-Fi</span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </div>
+
+        {/* Public Transit */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 animate-slideInLeft" style={{ animationDelay: '550ms' }}>
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.allow_transit}
+              onChange={(e) => setFormData({ ...formData, allow_transit: e.target.checked })}
+              className="w-6 h-6 rounded-lg text-green-600 focus:ring-green-500 transition-all"
+            />
+            <div className="flex-1">
+              <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <span className="text-2xl">🚍</span>
+                Использовать общественный транспорт
+              </span>
+              <p className="text-xs text-gray-600 mt-1">Для больших расстояний (&gt;2 км) предложим автобус/трамвай</p>
+            </div>
+          </label>
         </div>
 
         {/* Validation error */}

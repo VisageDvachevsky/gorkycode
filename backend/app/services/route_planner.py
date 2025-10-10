@@ -81,25 +81,39 @@ class RoutePlanner:
         coffee_interval_minutes: int,
         coffee_pois: List[POI],
     ) -> List[POI]:
-        if not coffee_pois or not route:
+        if not coffee_pois or not route or len(route) < 2:
+            return route
+        
+        available_cafes = [c for c in coffee_pois if c.id not in [p.id for p in route]]
+        
+        if not available_cafes:
             return route
         
         result = []
-        elapsed_time = 0
+        time_since_last_break = 0
         
-        for poi in route:
+        for i, poi in enumerate(route):
             result.append(poi)
-            elapsed_time += poi.avg_visit_minutes
+            time_since_last_break += poi.avg_visit_minutes
             
-            if elapsed_time >= coffee_interval_minutes and len(result) < len(route):
-                nearest_coffee = self._find_nearest_coffee(poi, coffee_pois)
-                if nearest_coffee and nearest_coffee not in result:
-                    result.append(nearest_coffee)
-                    elapsed_time = 0
+            # Если накопилось достаточно времени и это не последняя точка
+            if time_since_last_break >= coffee_interval_minutes and i < len(route) - 1:
+                nearest_cafe = self._find_nearest_coffee(poi, available_cafes)
+                
+                if nearest_cafe:
+                    # Проверяем, что кафе еще не добавлено
+                    if nearest_cafe.id not in [p.id for p in result]:
+                        result.append(nearest_cafe)
+                        time_since_last_break = 0
+                        # Удаляем из доступных, чтобы не добавить дважды
+                        available_cafes = [c for c in available_cafes if c.id != nearest_cafe.id]
         
         return result
     
     def _find_nearest_coffee(self, from_poi: POI, coffee_pois: List[POI]) -> POI | None:
+        if not coffee_pois:
+            return None
+        
         min_dist = float('inf')
         nearest = None
         
@@ -108,7 +122,11 @@ class RoutePlanner:
                 from_poi.lat, from_poi.lon,
                 coffee_poi.lat, coffee_poi.lon
             )
-            if dist < min_dist:
+            
+            if dist < 0.5 and dist < min_dist:
+                min_dist = dist
+                nearest = coffee_poi
+            elif nearest is None and dist < min_dist:
                 min_dist = dist
                 nearest = coffee_poi
         

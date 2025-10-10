@@ -26,35 +26,47 @@ class LLMService:
         system_prompt = self._load_system_prompt()
         
         user_prompt = f"""
-Generate explanations for a walking route in Nizhny Novgorod.
+Создай увлекательные объяснения для пешего маршрута по Нижнему Новгороду.
 
-User profile:
-- Interests: {user_interests}
-- Social mode: {social_mode}
-- Intensity: {intensity}
+ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:
+- Интересы: {user_interests or "разнообразные достопримечательности"}
+- Формат прогулки: {self._translate_social_mode(social_mode)}
+- Темп: {self._translate_intensity(intensity)}
 
-Route points:
+ТОЧКИ МАРШРУТА:
 {self._format_pois_for_prompt(route)}
 
-Return ONLY valid JSON with this structure:
+ВАЖНЫЕ ТРЕБОВАНИЯ:
+1. Поле "why" должно содержать 2-3 предложения, объясняющих:
+   - КОНКРЕТНУЮ связь места с интересами пользователя
+   - Уникальные особенности именно этого места
+   - Что пользователь увидит/почувствует/узнает здесь
+   
+2. Избегай общих фраз типа "интересное место" или "стоит посетить"
+3. Используй яркие, запоминающиеся детали
+4. Адаптируй тон под формат прогулки (романтично для пары, семейно для детей, etc)
+5. Если это кофе-брейк, объясни почему именно это кафе подходит
+
+Верни ТОЛЬКО валидный JSON:
 {{
-    "summary": "Brief engaging introduction to the route",
+    "summary": "Краткое вдохновляющее введение в маршрут (2-3 предложения)",
     "explanations": [
         {{
             "poi_id": 1,
-            "why": "Personal explanation why this POI fits user interests",
-            "tip": "Local tip or photo advice"
+            "why": "Детальное объяснение ПОЧЕМУ именно это место выбрано для пользователя. Укажи конкретные детали, что здесь интересного, как это связано с интересами. Минимум 2-3 предложения с конкретикой.",
+            "tip": "Практичный совет местного жителя или фотосовет"
         }}
     ],
-    "atmospheric_description": "Poetic description of the walk experience",
-    "notes": ["Practical notes about the route"]
+    "atmospheric_description": "Поэтическое описание атмосферы прогулки (2-3 предложения)",
+    "notes": ["Практичные заметки о маршруте, погоде, времени"]
 }}
 """
         
         if self.provider == "anthropic":
             response = await self.client.messages.create(
                 model=settings.LLM_MODEL,
-                max_tokens=2000,
+                max_tokens=3000,
+                temperature=0.8,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}]
             )
@@ -66,7 +78,8 @@ Return ONLY valid JSON with this structure:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=0.8,
+                max_tokens=3000,
             )
             content = response.choices[0].message.content
         
@@ -77,24 +90,52 @@ Return ONLY valid JSON with this structure:
         for i, poi in enumerate(pois, 1):
             lines.append(
                 f"{i}. {poi.name} (ID: {poi.id})\n"
-                f"   Category: {poi.category}\n"
-                f"   Description: {poi.description}\n"
-                f"   Tags: {', '.join(poi.tags)}"
+                f"   Категория: {poi.category}\n"
+                f"   Описание: {poi.description}\n"
+                f"   Теги: {', '.join(poi.tags)}\n"
+                f"   Рейтинг: {poi.rating}/5.0"
             )
+            if poi.local_tip:
+                lines[-1] += f"\n   Локальный совет: {poi.local_tip}"
         return "\n\n".join(lines)
     
+    def _translate_social_mode(self, mode: str) -> str:
+        modes = {
+            "solo": "одиночная прогулка для созерцания и фотографии",
+            "friends": "прогулка с друзьями, живая атмосфера",
+            "family": "семейная прогулка с детьми"
+        }
+        return modes.get(mode, mode)
+    
+    def _translate_intensity(self, intensity: str) -> str:
+        intensities = {
+            "relaxed": "спокойный, расслабленный темп",
+            "medium": "средний темп с остановками",
+            "intense": "насыщенный, активный темп"
+        }
+        return intensities.get(intensity, intensity)
+    
     def _load_system_prompt(self) -> str:
-        return """You are an expert local guide for Nizhny Novgorod, Russia.
+        return """Ты — опытный местный гид по Нижнему Новгороду с глубоким знанием истории, культуры и секретных мест города.
 
-Your task is to explain why each point in the route was selected based on user's interests.
+Твоя задача — создавать ПЕРСОНАЛИЗИРОВАННЫЕ, ВДОХНОВЛЯЮЩИЕ объяснения для каждой точки маршрута.
 
-Guidelines:
-- Write in Russian
-- Be personal and engaging
-- Connect explanations to user's specific interests
-- Provide practical local tips
-- Keep explanations concise but meaningful
-- Return ONLY valid JSON, no markdown formatting"""
+ПРАВИЛА:
+1. Пиши живым, увлекательным языком на русском
+2. ИЗБЕГАЙ общих фраз — используй конкретные детали и факты
+3. Связывай каждое место с интересами конкретного пользователя
+4. Добавляй эмоциональную составляющую — атмосферу, ощущения
+5. Включай малоизвестные факты, которые удивят
+6. Адаптируй тон под формат прогулки (романтика, семья, друзья)
+7. Для кафе описывай атмосферу, специализацию, почему стоит зайти именно сюда
+
+СТРУКТУРА:
+- summary: Вступление, которое задает настроение всему маршруту
+- why: ДЕТАЛЬНОЕ объяснение (минимум 2-3 предложения) с конкретными деталями
+- tip: Практичный совет от местного жителя
+- atmospheric_description: Поэтичное описание общей атмосферы прогулки
+
+Возвращай ТОЛЬКО валидный JSON без markdown разметки."""
 
 
 llm_service = LLMService()
