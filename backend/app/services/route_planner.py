@@ -32,6 +32,9 @@ class RoutePlanner:
         
         available_minutes = available_hours * 60
         
+        # Smart reordering: prefer starting from furthest point
+        pois = self._reorder_pois_by_sectors(start_lat, start_lon, pois)
+        
         distance_matrix = await self._get_real_distance_matrix(
             start_lat, start_lon, pois
         )
@@ -64,6 +67,65 @@ class RoutePlanner:
         logger.info(f"✓ Optimized route: {len(ordered_route)} POIs, {final_distance:.2f}km (real roads)")
         
         return ordered_route, final_distance
+    
+    def _reorder_pois_by_sectors(
+        self,
+        start_lat: float,
+        start_lon: float,
+        pois: List[POI]
+    ) -> List[POI]:
+        """Reorder POIs to prefer starting from furthest quadrant"""
+        
+        if len(pois) <= 3:
+            return pois
+        
+        # Calculate center of mass
+        center_lat = sum(poi.lat for poi in pois) / len(pois)
+        center_lon = sum(poi.lon for poi in pois) / len(pois)
+        
+        # Assign each POI to a sector (NE, SE, SW, NW)
+        sectors = {
+            'NE': [], 'SE': [], 'SW': [], 'NW': []
+        }
+        
+        for poi in pois:
+            if poi.lat >= center_lat and poi.lon >= center_lon:
+                sectors['NE'].append(poi)
+            elif poi.lat < center_lat and poi.lon >= center_lon:
+                sectors['SE'].append(poi)
+            elif poi.lat < center_lat and poi.lon < center_lon:
+                sectors['SW'].append(poi)
+            else:
+                sectors['NW'].append(poi)
+        
+        # Find which sector start point is in
+        start_sector = None
+        if start_lat >= center_lat and start_lon >= center_lon:
+            start_sector = 'NE'
+        elif start_lat < center_lat and start_lon >= center_lon:
+            start_sector = 'SE'
+        elif start_lat < center_lat and start_lon < center_lon:
+            start_sector = 'SW'
+        else:
+            start_sector = 'NW'
+        
+        # Prefer POIs from opposite sectors first (to minimize backtracking)
+        sector_priority = {
+            'NE': ['SW', 'SE', 'NW', 'NE'],
+            'SE': ['NW', 'NE', 'SW', 'SE'],
+            'SW': ['NE', 'NW', 'SE', 'SW'],
+            'NW': ['SE', 'SW', 'NE', 'NW']
+        }
+        
+        reordered = []
+        for sector_key in sector_priority.get(start_sector, ['NE', 'SE', 'SW', 'NW']):
+            reordered.extend(sectors[sector_key])
+        
+        if reordered:
+            logger.info(f"✓ Reordered POIs by sectors (start: {start_sector})")
+            return reordered
+        
+        return pois
     
     async def _get_real_distance_matrix(
         self,
@@ -113,31 +175,65 @@ class RoutePlanner:
         total_distance = 0.0
         
         current_idx = -1
+        prev_direction = None  # Track movement direction
         
         while remaining and total_time < available_minutes:
-            nearest_idx = None
-            nearest_dist = float('inf')
+            best_idx = None
+            best_score = float('inf')
             
             for poi_idx in remaining:
                 dist = distance_matrix[current_idx + 1][poi_idx + 1]
-                if dist < nearest_dist:
-                    nearest_dist = dist
-                    nearest_idx = poi_idx
+                
+                # Calculate direction-aware score
+                score = dist
+                
+                # Penalty for backtracking
+                if current_idx >= 0 and prev_direction is not None:
+                    current_pos = (pois[current_idx].lat, pois[current_idx].lon) if current_idx >= 0 else (0, 0)
+                    next_pos = (pois[poi_idx].lat, pois[poi_idx].lon)
+                    
+                    # Calculate direction vector
+                    if current_idx >= 0:
+                        direction = (
+                            next_pos[0] - current_pos[0],
+                            next_pos[1] - current_pos[1]
+                        )
+                        
+                        # Dot product with previous direction
+                        # Positive = same direction, Negative = backtracking
+                        dot = direction[0] * prev_direction[0] + direction[1] * prev_direction[1]
+                        
+                        if dot < 0:  # Backtracking
+                            score *= 1.3  # 30% penalty
+                
+                if score < best_score:
+                    best_score = score
+                    best_idx = poi_idx
             
-            if nearest_idx is None:
+            if best_idx is None:
                 break
             
+            nearest_dist = distance_matrix[current_idx + 1][best_idx + 1]
             walk_time = self.calculate_walk_time_minutes(nearest_dist)
-            poi_time = pois[nearest_idx].avg_visit_minutes
+            poi_time = pois[best_idx].avg_visit_minutes
             
             if total_time + walk_time + poi_time > available_minutes:
                 break
             
-            route.append(nearest_idx)
+            # Update direction vector
+            if current_idx >= 0:
+                current_pos = (pois[current_idx].lat, pois[current_idx].lon)
+                next_pos = (pois[best_idx].lat, pois[best_idx].lon)
+                prev_direction = (
+                    next_pos[0] - current_pos[0],
+                    next_pos[1] - current_pos[1]
+                )
+            
+            route.append(best_idx)
             total_time += walk_time + poi_time
             total_distance += nearest_dist
-            current_idx = nearest_idx
-            remaining.remove(nearest_idx)
+            current_idx = best_idx
+            remaining.remove(best_idx)
         
         return route, total_time, total_distance
     

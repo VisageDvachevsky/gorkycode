@@ -43,12 +43,47 @@ class RoutingService:
         """Calculate complete route geometry with all waypoints"""
         
         all_points = [start] + waypoints
-        route = await self.get_walking_route(all_points)
         
-        if route and route["geometry"]:
-            geometry = [[lat, lon] for lat, lon in route["geometry"]]
-            logger.info(f"✓ Route geometry: {len(geometry)} points")
-            return geometry
+        # If too many waypoints, split into chunks and merge
+        if len(all_points) > 10:
+            logger.info(f"Splitting {len(all_points)} waypoints into multiple routing requests")
+            
+            all_geometry = []
+            chunk_size = 9  # Leave room for overlap
+            
+            for i in range(0, len(all_points) - 1, chunk_size):
+                chunk_end = min(i + chunk_size + 1, len(all_points))
+                chunk = all_points[i:chunk_end]
+                
+                logger.info(f"Routing chunk {i//chunk_size + 1}: points {i} to {chunk_end-1}")
+                
+                route = await self.get_walking_route(chunk)
+                
+                if route and route["geometry"]:
+                    chunk_geometry = [[lat, lon] for lat, lon in route["geometry"]]
+                    
+                    # Skip first point if not first chunk (avoid duplicates)
+                    if all_geometry and chunk_geometry:
+                        chunk_geometry = chunk_geometry[1:]
+                    
+                    all_geometry.extend(chunk_geometry)
+                else:
+                    # Fallback to straight lines for this chunk
+                    logger.warning(f"Chunk {i//chunk_size + 1} failed, using straight lines")
+                    for point in chunk[1:]:
+                        all_geometry.append([point[0], point[1]])
+            
+            if all_geometry:
+                logger.info(f"✓ Merged route geometry: {len(all_geometry)} points from {(len(all_points)-1)//chunk_size + 1} chunks")
+                return all_geometry
+        else:
+            # Single request for small routes
+            route = await self.get_walking_route(all_points)
+            
+            if route and route["geometry"]:
+                geometry = [[lat, lon] for lat, lon in route["geometry"]]
+                logger.info(f"✓ Route geometry: {len(geometry)} points")
+                return geometry
         
         logger.warning("⚠ Fallback to straight lines")
         return [[lat, lon] for lat, lon in all_points]

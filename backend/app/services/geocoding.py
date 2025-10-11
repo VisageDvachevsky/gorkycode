@@ -10,10 +10,10 @@ class GeocodingService:
     """Geocoding service using 2GIS Places + Geocoding APIs"""
     
     NIZHNY_NOVGOROD_BOUNDS = {
-        "lat_min": 56.29,
-        "lat_max": 56.36,
-        "lon_min": 43.85,
-        "lon_max": 44.10
+        "lat_min": 56.20,  # Expanded south
+        "lat_max": 56.40,  # Expanded north
+        "lon_min": 43.75,  # Expanded west
+        "lon_max": 44.15   # Expanded east
     }
     
     async def geocode_address(

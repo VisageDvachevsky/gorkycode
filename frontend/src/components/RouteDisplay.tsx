@@ -342,8 +342,28 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
                   {/* Description */}
                   <p className="text-gray-700 mb-4 leading-relaxed">{poi.why}</p>
                   
+                  {/* Cafe-specific real data visualization */}
+                  {poi.is_coffee_break && poi.tip && poi.tip.includes("•") && (
+                    <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border-2 border-amber-200">
+                      <div className="flex items-start gap-3">
+                        <span className="text-3xl">☕</span>
+                        <div className="flex-1">
+                          <div className="font-semibold text-amber-900 mb-2">Реальные данные</div>
+                          <div className="text-sm text-amber-800 space-y-1">
+                            {poi.tip.split(" | ").map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="text-amber-600">•</span>
+                                <span>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Tip */}
-                  {poi.tip && (
+                  {poi.tip && !poi.tip.includes("•") && (
                     <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-l-4 border-blue-500">
                       <p className="text-sm text-blue-900">
                         <span className="font-bold">💡 Совет:</span> {poi.tip}

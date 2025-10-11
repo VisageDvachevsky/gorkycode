@@ -177,7 +177,53 @@ class CoffeeService:
         return None
     
     def convert_to_poi(self, cafe_data: Dict[str, Any]) -> POI:
-        """Convert 2GIS cafe data to POI object"""
+        """Convert 2GIS cafe data to POI object with rich description"""
+        
+        # Build rich description from real data
+        description_parts = []
+        
+        # Type and cuisine
+        if cafe_data.get("cuisine"):
+            description_parts.append(f"{', '.join(cafe_data['cuisine'])}")
+        
+        # Location
+        if cafe_data.get("address"):
+            description_parts.append(f"Адрес: {cafe_data['address']}")
+        
+        # Schedule
+        if cafe_data.get("schedule_text"):
+            description_parts.append(cafe_data['schedule_text'])
+        
+        # Rating
+        if cafe_data.get("rating") and cafe_data.get("review_count"):
+            rating = cafe_data['rating']
+            count = cafe_data['review_count']
+            description_parts.append(f"⭐ {rating}/5 ({count} отзывов)")
+        
+        # Features
+        if cafe_data.get("features"):
+            features_text = " • ".join(cafe_data['features'])
+            description_parts.append(f"🔸 {features_text}")
+        
+        description = " | ".join(description_parts) if description_parts else "Кафе для отдыха"
+        
+        # Build tip from features
+        tips = []
+        if "Wi-Fi" in cafe_data.get("features", []):
+            tips.append("Wi-Fi доступен для работы")
+        if "Веранда" in cafe_data.get("features", []):
+            tips.append("Летняя терраса")
+        if "Завтраки" in cafe_data.get("features", []):
+            tips.append("Хорошие завтраки")
+        
+        local_tip = ", ".join(tips) if tips else None
+        
+        # Enhanced tags
+        tags = ["кофе", "отдых", "кофе-брейк"]
+        if cafe_data.get("cuisine"):
+            tags.extend(cafe_data['cuisine'][:2])
+        if cafe_data.get("features"):
+            tags.extend([f.lower() for f in cafe_data['features'][:2]])
         
         return POI(
             id=hash(cafe_data["id"]) % 1000000,
@@ -185,12 +231,13 @@ class CoffeeService:
             lat=cafe_data["lat"],
             lon=cafe_data["lon"],
             category="cafe",
-            tags=["кофе", "отдых"] + cafe_data.get("rubrics", [])[:3],
-            description=f"Кафе в {cafe_data.get('address', 'центре города')}",
+            tags=tags[:5],
+            description=description,
+            local_tip=local_tip,
             avg_visit_minutes=30,
             social_mode="any",
             intensity_level="relaxed",
-            rating=4.0,
+            rating=cafe_data.get("rating", 4.0),
             embedding=None
         )
 
