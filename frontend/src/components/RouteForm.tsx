@@ -47,6 +47,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     social_mode: 'solo',
     intensity: 'medium',
     allow_transit: true,
+    start_address: '',
   })
 
   const [coffeePrefs, setCoffeePrefs] = useState<CoffeePreferences>({
@@ -71,11 +72,10 @@ export default function RouteForm({ onRouteGenerated }: Props) {
 
   useEffect(() => {
     let progress = 0
-    const steps = 4
     
     if (formData.interests.trim() || selectedCategories.length > 0) progress += 25
     if (formData.hours) progress += 25
-    if (locationType === 'address' ? formData.start_address : (formData.start_lat && formData.start_lon)) progress += 25
+    if (locationType === 'address' ? formData.start_address : (formData.start_lat !== undefined && formData.start_lon !== undefined)) progress += 25
     progress += 25
     
     setFormProgress(progress)
@@ -97,12 +97,12 @@ export default function RouteForm({ onRouteGenerated }: Props) {
       return
     }
     
-    if (locationType === 'coords' && (!formData.start_lat || !formData.start_lon)) {
+    if (locationType === 'coords' && (formData.start_lat === undefined || formData.start_lon === undefined)) {
       setValidationError('Укажите координаты')
       return
     }
     
-    if (locationType === 'map' && (!formData.start_lat || !formData.start_lon)) {
+    if (locationType === 'map' && (formData.start_lat === undefined || formData.start_lon === undefined)) {
       setValidationError('Выберите точку на карте')
       return
     }
@@ -222,7 +222,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
             <input
               type="number"
               value={formData.hours}
-              onChange={(e) => setFormData({ ...formData, hours: parseFloat(e.target.value) })}
+              onChange={(e) => setFormData({ ...formData, hours: parseFloat(e.target.value) || 3 })}
               min="0.5"
               max="12"
               step="0.5"
@@ -295,7 +295,29 @@ export default function RouteForm({ onRouteGenerated }: Props) {
                 type="button"
                 onClick={() => {
                   setLocationType(type.value as any)
-                  if (type.value === 'map') setShowMap(true)
+                  if (type.value === 'map') {
+                    setShowMap(true)
+                    setFormData({ 
+                      ...formData, 
+                      start_lat: DEFAULT_CENTER.lat,
+                      start_lon: DEFAULT_CENTER.lon,
+                      start_address: undefined
+                    })
+                  } else if (type.value === 'coords') {
+                    setFormData({
+                      ...formData,
+                      start_lat: DEFAULT_CENTER.lat,
+                      start_lon: DEFAULT_CENTER.lon,
+                      start_address: undefined
+                    })
+                  } else {
+                    setFormData({
+                      ...formData,
+                      start_lat: undefined,
+                      start_lon: undefined,
+                      start_address: ''
+                    })
+                  }
                 }}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 transform hover:scale-105 ${
                   locationType === type.value
@@ -323,16 +345,16 @@ export default function RouteForm({ onRouteGenerated }: Props) {
             <div className="grid grid-cols-2 gap-4 animate-fadeIn">
               <input
                 type="number"
-                value={formData.start_lat || DEFAULT_CENTER.lat}
-                onChange={(e) => setFormData({ ...formData, start_lat: parseFloat(e.target.value) })}
+                value={formData.start_lat ?? ''}
+                onChange={(e) => setFormData({ ...formData, start_lat: e.target.value ? parseFloat(e.target.value) : undefined })}
                 step="0.0001"
                 placeholder="Широта"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-gray-300"
               />
               <input
                 type="number"
-                value={formData.start_lon || DEFAULT_CENTER.lon}
-                onChange={(e) => setFormData({ ...formData, start_lon: parseFloat(e.target.value) })}
+                value={formData.start_lon ?? ''}
+                onChange={(e) => setFormData({ ...formData, start_lon: e.target.value ? parseFloat(e.target.value) : undefined })}
                 step="0.0001"
                 placeholder="Долгота"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-gray-300"
@@ -343,7 +365,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           {locationType === 'map' && showMap && (
             <div className="h-64 rounded-xl overflow-hidden border-2 border-gray-200 animate-fadeIn">
               <MapContainer
-                center={[DEFAULT_CENTER.lat, DEFAULT_CENTER.lon]}
+                center={[formData.start_lat ?? DEFAULT_CENTER.lat, formData.start_lon ?? DEFAULT_CENTER.lon]}
                 zoom={13}
                 style={{ height: '100%', width: '100%' }}
               >
@@ -369,7 +391,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
             />
             <span className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <span className="text-2xl">☕</span>
-              Умные кофе-брейки (через OSM)
+              Умные кофе-брейки (через 2GIS Places API)
             </span>
           </label>
           
@@ -518,7 +540,9 @@ export default function RouteForm({ onRouteGenerated }: Props) {
         {mutation.isError && (
           <div className="bg-red-50 border-2 border-red-200 text-red-700 px-5 py-4 rounded-2xl animate-scaleIn">
             <p className="font-bold">Ошибка при создании маршрута</p>
-            <p className="text-sm mt-1">Проверьте введённые данные и попробуйте ещё раз.</p>
+            <p className="text-sm mt-1">
+              {(mutation.error as any)?.response?.data?.detail || 'Проверьте введённые данные и попробуйте ещё раз.'}
+            </p>
           </div>
         )}
       </form>

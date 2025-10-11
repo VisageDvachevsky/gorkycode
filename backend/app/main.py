@@ -10,16 +10,12 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import init_db
 from app.services.embedding import embedding_service
-from app.services.geocoding import geocoding_service
-from app.services.routing import routing_service
+from app.services.twogis_client import twogis_client
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 
 logger = logging.getLogger(__name__)
@@ -28,33 +24,36 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    logger.info("Starting AI-Tourist API...")
+    logger.info("Starting AI-Tourist API v0.2.0...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"LLM Provider: {settings.LLM_PROVIDER}")
     logger.info(f"LLM Model: {settings.LLM_MODEL}")
     
-    # Initialize database
     await init_db()
     logger.info("Database initialized")
     
-    # Connect Redis for all services
     await embedding_service.connect_redis()
-    await geocoding_service.connect_redis()
-    await routing_service.connect_redis()
+    await twogis_client.connect_redis()
     logger.info("Redis connections established")
     
-    # Check API keys
-    if not settings.ANTHROPIC_API_KEY and not settings.OPENAI_API_KEY:
-        logger.warning("No LLM API key configured! AI explanations will not work.")
+    if not settings.TWOGIS_API_KEY:
+        logger.error("❌ TWOGIS_API_KEY not configured!")
+        logger.error("Get your free 2GIS API key at https://dev.2gis.com")
+        logger.error("This is REQUIRED for geocoding, routing, and place search")
+    else:
+        logger.info("✓ 2GIS API key configured")
     
-    if not settings.OPENROUTESERVICE_API_KEY:
-        logger.warning(
-            "OpenRouteService API key not configured. "
-            "Using public endpoint with rate limits. "
-            "Get your free key at https://openrouteservice.org/dev/#/signup"
-        )
+    if not settings.ANTHROPIC_API_KEY and not settings.OPENAI_API_KEY:
+        logger.warning("⚠ No LLM API key configured! AI explanations will not work.")
+    else:
+        logger.info("✓ LLM API key configured")
     
     logger.info("AI-Tourist API ready!")
+    logger.info("Using 2GIS APIs for:")
+    logger.info("  - Geocoding (address → coordinates)")
+    logger.info("  - Routing (real walking paths)")
+    logger.info("  - Public Transit (bus/tram suggestions)")
+    logger.info("  - Places Search (smart cafe discovery)")
     
     yield
     
@@ -106,7 +105,11 @@ async def health_check():
     return {
         "status": "healthy",
         "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
+        "services": {
+            "2gis": bool(settings.TWOGIS_API_KEY),
+            "llm": bool(settings.ANTHROPIC_API_KEY or settings.OPENAI_API_KEY)
+        }
     }
 
 
@@ -114,7 +117,8 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "message": "AI-Tourist API",
+        "message": "AI-Tourist API v0.2.0",
         "version": settings.VERSION,
+        "powered_by": "2GIS APIs",
         "docs": "/docs"
     }

@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import type { RouteResponse } from '../types'
 
+// Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -21,14 +22,31 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41]
 })
 
-const coffeeIcon = L.icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
-  iconRetinaUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+// Custom coffee icon with emoji
+const coffeeIcon = L.divIcon({
+  html: `<div style="
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    border: 3px solid white;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  " class="coffee-marker">
+    <span style="
+      transform: rotate(45deg);
+      font-size: 20px;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+    ">☕</span>
+  </div>`,
+  className: '',
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+  popupAnchor: [0, -36]
 })
 
 interface Props {
@@ -43,6 +61,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
   const positions = route.route.map((poi) => [poi.lat, poi.lon] as [number, number])
   const center = positions[0] || [56.3287, 44.002]
   
+  // Use real route geometry if available
   const routeGeometry = route.route_geometry && route.route_geometry.length > 0
     ? route.route_geometry.map(coord => [coord[0], coord[1]] as [number, number])
     : positions
@@ -82,6 +101,9 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
     }
   }
 
+  // Count coffee breaks
+  const coffeeBreaksCount = route.route.filter(poi => poi.is_coffee_break).length
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header with actions */}
@@ -91,7 +113,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
             <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 mb-2">
               Ваш маршрут
             </h2>
-            <p className="text-gray-500">Персональная прогулка готова</p>
+            <p className="text-gray-500">Персональная прогулка готова 🗺️</p>
           </div>
           
           <div className="flex flex-wrap gap-2 print:hidden">
@@ -117,7 +139,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
         </div>
         
         {/* Stats cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 transform hover:scale-105 transition-all duration-200 hover:shadow-md">
             <div className="flex items-center gap-3">
               <div className="text-4xl">⏱️</div>
@@ -136,7 +158,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
               <div className="text-4xl">📍</div>
               <div>
                 <div className="text-2xl font-bold text-green-900">{route.route.length}</div>
-                <div className="text-xs text-green-700">Мест</div>
+                <div className="text-xs text-green-700">Точек</div>
               </div>
             </div>
             <div className="absolute -right-4 -bottom-4 text-8xl opacity-10">📍</div>
@@ -152,6 +174,19 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
             </div>
             <div className="absolute -right-4 -bottom-4 text-8xl opacity-10">🚶</div>
           </div>
+
+          {coffeeBreaksCount > 0 && (
+            <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-orange-100 rounded-xl p-4 transform hover:scale-105 transition-all duration-200 hover:shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="text-4xl">☕</div>
+                <div>
+                  <div className="text-2xl font-bold text-amber-900">{coffeeBreaksCount}</div>
+                  <div className="text-xs text-amber-700">Кофе-брейков</div>
+                </div>
+              </div>
+              <div className="absolute -right-4 -bottom-4 text-8xl opacity-10">☕</div>
+            </div>
+          )}
         </div>
         
         {/* Summary */}
@@ -188,6 +223,8 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             />
+            
+            {/* Route markers */}
             {route.route.map((poi) => (
               <Marker 
                 key={poi.poi_id}
@@ -197,14 +234,18 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
                   click: () => scrollToPoi(poi.poi_id)
                 }}
               >
-                <Popup>
-                  <div className="text-sm max-w-xs p-2">
+                <Popup maxWidth={300}>
+                  <div className="text-sm p-2">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-md">
                         {poi.order}
                       </span>
                       <strong className="text-base text-gray-900">{poi.name}</strong>
-                      {poi.is_coffee_break && <span className="text-xl">☕</span>}
+                      {poi.is_coffee_break && (
+                        <span className="ml-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full">
+                          ☕ Кофе
+                        </span>
+                      )}
                     </div>
                     <p className="text-gray-700 mb-3 leading-relaxed">{poi.why}</p>
                     {poi.tip && (
@@ -221,6 +262,8 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
                 </Popup>
               </Marker>
             ))}
+            
+            {/* Route polyline - real walking path */}
             <Polyline 
               positions={routeGeometry} 
               color="#3B82F6" 
@@ -230,6 +273,25 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
               className="animate-dashOffset"
             />
           </MapContainer>
+          
+          {/* Map legend */}
+          <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg z-[1000]">
+            <div className="text-xs font-semibold mb-2">Легенда</div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-600 rounded-full"></div>
+                <span className="text-xs">Места</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-white text-xs">☕</div>
+                <span className="text-xs">Кафе</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-1 bg-blue-600" style={{ clipPath: 'polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%)' }}></div>
+                <span className="text-xs">Маршрут</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -262,7 +324,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
                       ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
                       : 'bg-gradient-to-br from-blue-600 to-indigo-600'
                   }`}>
-                    {poi.order}
+                    {poi.is_coffee_break ? '☕' : poi.order}
                   </div>
                 </div>
                 

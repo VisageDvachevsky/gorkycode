@@ -1,10 +1,15 @@
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any, TYPE_CHECKING
 import numpy as np
-from scipy.spatial.distance import cdist
 
 from app.core.config import settings
 from app.models.poi import POI
+
+if TYPE_CHECKING:
+    from app.services.coffee import CoffeeService
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 class RoutePlanner:
@@ -12,8 +17,8 @@ class RoutePlanner:
         self.walk_speed_kmh = settings.DEFAULT_WALK_SPEED_KMH
     
     def calculate_distance_km(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Haversine distance"""
         R = 6371.0
-        
         lat1_rad = np.radians(lat1)
         lat2_rad = np.radians(lat2)
         dlon = np.radians(lon2 - lon1)
@@ -25,6 +30,7 @@ class RoutePlanner:
         return R * c
     
     def calculate_walk_time_minutes(self, distance_km: float) -> int:
+        """Calculate walking time with buffer"""
         return int((distance_km / self.walk_speed_kmh) * 60) + 5
     
     def optimize_route(
@@ -34,15 +40,14 @@ class RoutePlanner:
         pois: List[POI],
         available_hours: float,
     ) -> Tuple[List[POI], float]:
+        """Optimize route using greedy nearest neighbor"""
+        
         if not pois:
             return [], 0.0
         
         available_minutes = available_hours * 60
         
-        coords = np.array([[poi.lat, poi.lon] for poi in pois])
-        start_coord = np.array([[start_lat, start_lon]])
-        
-        current_pos = start_coord[0]
+        current_pos = np.array([start_lat, start_lon])
         remaining_pois = list(pois)
         ordered_route = []
         total_time = 0
@@ -75,18 +80,17 @@ class RoutePlanner:
         
         return ordered_route, total_distance
     
-    def insert_coffee_breaks(
+    async def insert_smart_coffee_breaks(
         self,
         route: List[POI],
-        coffee_interval_minutes: int,
-        coffee_pois: List[POI],
+        interval_minutes: int,
+        preferences: Dict[str, Any],
+        coffee_service: "CoffeeService",
+        session: Any = None
     ) -> List[POI]:
-        if not coffee_pois or not route or len(route) < 2:
-            return route
+        """Insert coffee breaks using 2GIS Places API with DB fallback"""
         
-        available_cafes = [c for c in coffee_pois if c.id not in [p.id for p in route]]
-        
-        if not available_cafes:
+        if not route or len(route) < 2:
             return route
         
         result = []
@@ -96,41 +100,27 @@ class RoutePlanner:
             result.append(poi)
             time_since_last_break += poi.avg_visit_minutes
             
-            # Если накопилось достаточно времени и это не последняя точка
-            if time_since_last_break >= coffee_interval_minutes and i < len(route) - 1:
-                nearest_cafe = self._find_nearest_coffee(poi, available_cafes)
+            if time_since_last_break >= interval_minutes and i < len(route) - 1:
+                next_poi = route[i + 1]
                 
-                if nearest_cafe:
-                    # Проверяем, что кафе еще не добавлено
-                    if nearest_cafe.id not in [p.id for p in result]:
-                        result.append(nearest_cafe)
+                cafe_data = await coffee_service.find_best_cafe_for_route(
+                    from_poi=poi,
+                    to_poi=next_poi,
+                    preferences=preferences,
+                    session=session
+                )
+                
+                if cafe_data:
+                    cafe_poi = coffee_service.convert_to_poi(cafe_data)
+                    
+                    if cafe_poi.id not in [p.id for p in result]:
+                        result.append(cafe_poi)
                         time_since_last_break = 0
-                        # Удаляем из доступных, чтобы не добавить дважды
-                        available_cafes = [c for c in available_cafes if c.id != nearest_cafe.id]
+                        logger.info(f"✓ Added coffee break: {cafe_poi.name}")
         
         return result
-    
-    def _find_nearest_coffee(self, from_poi: POI, coffee_pois: List[POI]) -> POI | None:
-        if not coffee_pois:
-            return None
         
-        min_dist = float('inf')
-        nearest = None
-        
-        for coffee_poi in coffee_pois:
-            dist = self.calculate_distance_km(
-                from_poi.lat, from_poi.lon,
-                coffee_poi.lat, coffee_poi.lon
-            )
-            
-            if dist < 0.5 and dist < min_dist:
-                min_dist = dist
-                nearest = coffee_poi
-            elif nearest is None and dist < min_dist:
-                min_dist = dist
-                nearest = coffee_poi
-        
-        return nearest
+        return result
 
 
 route_planner = RoutePlanner()

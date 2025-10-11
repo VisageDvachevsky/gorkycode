@@ -1,3 +1,13 @@
+export interface CoffeePreferences {
+  enabled: boolean
+  interval_minutes: number
+  cuisine?: string
+  dietary?: string
+  outdoor_seating?: boolean
+  wifi?: boolean
+  search_radius_km?: number
+}
+
 export interface RouteRequest {
   interests: string
   categories?: string[]
@@ -6,8 +16,9 @@ export interface RouteRequest {
   start_lon?: number
   start_address?: string
   social_mode: 'solo' | 'friends' | 'family'
-  coffee_preference?: number
+  coffee_preferences?: CoffeePreferences
   intensity: 'relaxed' | 'medium' | 'intense'
+  allow_transit?: boolean
 }
 
 export interface POIInRoute {

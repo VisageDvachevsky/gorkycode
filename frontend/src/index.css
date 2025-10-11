@@ -65,6 +65,12 @@ body {
   }
 }
 
+@keyframes dashOffset {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out;
 }
@@ -85,6 +91,16 @@ body {
   animation: scaleIn 0.3s ease-out;
 }
 
+.animate-dashOffset {
+  animation: dashOffset 30s linear infinite;
+}
+
+/* Coffee marker hover effect */
+.coffee-marker:hover {
+  transform: rotate(-45deg) scale(1.15) !important;
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.5) !important;
+}
+
 /* Стили для маршрута на карте */
 .route-line {
   stroke-linecap: round;
@@ -102,6 +118,11 @@ body {
   }
   
   .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Hide map controls when printing */
+  .leaflet-control-container {
     display: none !important;
   }
 }
@@ -129,4 +150,24 @@ html {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #2563EB;
+}
+
+/* Leaflet popup customization */
+.leaflet-popup-content-wrapper {
+  border-radius: 12px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-popup-tip {
+  display: none;
+}
+
+/* Smooth transitions for markers */
+.leaflet-marker-icon {
+  transition: all 0.3s ease;
+}
+
+.leaflet-marker-icon:hover {
+  z-index: 1000 !important;
+  transform: scale(1.1);
 }

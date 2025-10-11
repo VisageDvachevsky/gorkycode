@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { RouteRequest, RouteResponse } from '../types'
+import type { RouteRequest, RouteResponse, Category } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -15,10 +15,11 @@ export const api = {
     const { data } = await client.post<RouteResponse>('/route/plan', request)
     return data
   },
+  
   async getCategories(): Promise<Category[]> {
-  const { data } = await client.get<Category[]>('/categories/list')
-  return data
-}
+    const { data } = await client.get<Category[]>('/categories/list')
+    return data
+  }
 }
 
 export default client
