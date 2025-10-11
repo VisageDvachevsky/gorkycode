@@ -16,20 +16,22 @@ logger = logging.getLogger(__name__)
 class TransportType(str, Enum):
     WALKING = "pedestrian"
     DRIVING = "car"
-    TRANSIT = "transit"
+    BICYCLE = "bicycle"
 
 
 class TwoGISClient:
-    """Unified client for all 2GIS APIs with caching and error handling"""
     
-    GEOCODER_URL = "https://catalog.api.2gis.com/3.0/items/geocode"
-    DIRECTIONS_URL = "https://routing.api.2gis.com/get_dist_matrix"
-    ROUTING_URL = "https://routing.api.2gis.com/get_route"
     PLACES_URL = "https://catalog.api.2gis.com/3.0/items"
-    SUGGEST_URL = "https://catalog.api.2gis.com/3.0/suggests"
-    TRANSIT_URL = "https://public-transport.api.2gis.com/routing"
+    GEOCODER_URL = "https://catalog.api.2gis.com/3.0/items/geocode"
+    ROUTING_URL = "https://routing.api.2gis.com/routing/7.0.0/global"
+    DISTANCE_MATRIX_URL = "https://routing.api.2gis.com/get_dist_matrix"
+    RUBRICS_URL = "https://catalog.api.2gis.com/2.0/catalog/rubric/search"
     
-    NIZHNY_NOVGOROD_REGION_ID = 97
+    NIZHNY_NOVGOROD_REGION_ID = 52
+    
+    CAFE_RUBRIC_ID = 162
+    RESTAURANT_RUBRIC_ID = 164
+    BAR_RUBRIC_ID = 159
     
     def __init__(self):
         self.api_key = settings.TWOGIS_API_KEY
@@ -67,14 +69,12 @@ class TwoGISClient:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=5),
     )
-    async def _request(
+    async def _request_get(
         self,
         url: str,
         params: Dict[str, Any],
         timeout: int = 30
     ) -> Optional[Dict[str, Any]]:
-        """Make authenticated request to 2GIS API"""
-        
         if not self.api_key:
             logger.error("2GIS API key not configured")
             return None
@@ -87,11 +87,59 @@ class TwoGISClient:
                 
                 if response.status_code == 200:
                     return response.json()
+                elif response.status_code == 400:
+                    logger.error(f"2GIS API 400: {response.text}")
+                    return None
                 elif response.status_code == 429:
                     logger.warning("2GIS rate limit exceeded")
                     raise httpx.HTTPError("Rate limit")
                 else:
-                    logger.error(f"2GIS API error: {response.status_code}")
+                    logger.error(f"2GIS API error: {response.status_code} - {response.text}")
+                    return None
+                    
+            except httpx.TimeoutException:
+                logger.error(f"2GIS request timeout: {url}")
+                raise
+            except Exception as e:
+                logger.error(f"2GIS request failed: {e}")
+                raise
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=5),
+    )
+    async def _request_post(
+        self,
+        url: str,
+        params: Dict[str, Any],
+        json_body: Dict[str, Any],
+        timeout: int = 60
+    ) -> Optional[Dict[str, Any]]:
+        if not self.api_key:
+            logger.error("2GIS API key not configured")
+            return None
+        
+        params["key"] = self.api_key
+        
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                response = await client.post(
+                    url,
+                    params=params,
+                    json=json_body,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 400:
+                    logger.error(f"2GIS API 400: {response.text}")
+                    return None
+                elif response.status_code == 429:
+                    logger.warning("2GIS rate limit exceeded")
+                    raise httpx.HTTPError("Rate limit")
+                else:
+                    logger.error(f"2GIS API error: {response.status_code} - {response.text}")
                     return None
                     
             except httpx.TimeoutException:
@@ -106,13 +154,53 @@ class TwoGISClient:
         query: str,
         location: Optional[Tuple[float, float]] = None
     ) -> Optional[Tuple[float, float]]:
-        """Geocode address to coordinates using 2GIS Geocoder API"""
-        
         cache_key = self._cache_key("geocode", {"q": query})
         cached = await self._get_cached(cache_key)
         if cached:
             return tuple(cached)
         
+        coords = await self._geocode_places(query, location)
+        
+        if not coords:
+            coords = await self._geocode_address(query, location)
+        
+        if coords:
+            await self._set_cache(cache_key, coords, ttl=86400)
+            logger.info(f"✓ Geocoded: {query} → {coords}")
+            return coords
+        
+        return None
+    
+    async def _geocode_places(
+        self,
+        query: str,
+        location: Optional[Tuple[float, float]] = None
+    ) -> Optional[Tuple[float, float]]:
+        params = {
+            "q": f"{query}, Нижний Новгород",
+            "fields": "items.point,items.address",
+            "page_size": 1
+        }
+        
+        if location:
+            params["location"] = f"{location[1]},{location[0]}"
+            params["sort_point"] = f"{location[1]},{location[0]}"
+        
+        data = await self._request_get(self.PLACES_URL, params)
+        
+        if data and "result" in data and "items" in data["result"]:
+            items = data["result"]["items"]
+            if items and "point" in items[0]:
+                point = items[0]["point"]
+                return (point["lat"], point["lon"])
+        
+        return None
+    
+    async def _geocode_address(
+        self,
+        query: str,
+        location: Optional[Tuple[float, float]] = None
+    ) -> Optional[Tuple[float, float]]:
         params = {
             "q": f"{query}, Нижний Новгород",
             "region_id": self.NIZHNY_NOVGOROD_REGION_ID,
@@ -123,16 +211,13 @@ class TwoGISClient:
         if location:
             params["location"] = f"{location[1]},{location[0]}"
         
-        data = await self._request(self.GEOCODER_URL, params)
+        data = await self._request_get(self.GEOCODER_URL, params)
         
         if data and "result" in data and "items" in data["result"]:
             items = data["result"]["items"]
             if items and "point" in items[0]:
                 point = items[0]["point"]
-                coords = (point["lat"], point["lon"])
-                await self._set_cache(cache_key, coords, ttl=86400)
-                logger.info(f"✓ Geocoded: {query} → {coords}")
-                return coords
+                return (point["lat"], point["lon"])
         
         return None
     
@@ -141,8 +226,6 @@ class TwoGISClient:
         lat: float,
         lon: float
     ) -> Optional[str]:
-        """Reverse geocode coordinates to address"""
-        
         params = {
             "lon": lon,
             "lat": lat,
@@ -151,7 +234,7 @@ class TwoGISClient:
             "page_size": 1
         }
         
-        data = await self._request(self.GEOCODER_URL, params)
+        data = await self._request_get(self.GEOCODER_URL, params)
         
         if data and "result" in data and "items" in data["result"]:
             items = data["result"]["items"]
@@ -164,17 +247,13 @@ class TwoGISClient:
         self,
         points: List[Tuple[float, float]]
     ) -> Optional[Dict[str, Any]]:
-        """Get detailed walking route - 2GIS supports max 10 waypoints"""
-        
         if len(points) < 2:
             return None
         
-        # 2GIS Routing API limit: 10 waypoints max
-        if len(points) > 10:
-            logger.warning(f"Too many waypoints: {len(points)}, sampling to 10")
-            # Keep first, last, and sample middle points
-            indices = [0] + list(range(1, len(points)-1, max(1, (len(points)-2)//8))) + [len(points)-1]
-            indices = sorted(set(indices))[:10]
+        if len(points) > 5:
+            logger.warning(f"Too many waypoints: {len(points)}, sampling to 5")
+            indices = [0] + list(range(1, len(points)-1, max(1, (len(points)-2)//3))) + [len(points)-1]
+            indices = sorted(set(indices))[:5]
             points = [points[i] for i in indices]
         
         cache_key = self._cache_key("route_walk", {"points": points})
@@ -182,16 +261,28 @@ class TwoGISClient:
         if cached:
             return cached
         
-        # Format as array of objects
-        formatted_points = [{"lat": lat, "lon": lon} for lat, lon in points]
+        formatted_points = []
+        for i, (lat, lon) in enumerate(points):
+            point_type = "walking" if i == 0 else "stop" if i == len(points)-1 else "pref"
+            formatted_points.append({
+                "type": point_type,
+                "lon": lon,
+                "lat": lat
+            })
         
-        params = {
-            "points": json.dumps(formatted_points),
-            "type": TransportType.WALKING.value,
-            "output": "summary,geometry",
+        request_body = {
+            "points": formatted_points,
+            "transport": "pedestrian",
+            "route_mode": "fastest",
+            "output": "detailed"
         }
         
-        data = await self._request(self.ROUTING_URL, params, timeout=60)
+        data = await self._request_post(
+            self.ROUTING_URL,
+            params={},
+            json_body=request_body,
+            timeout=60
+        )
         
         if data and "result" in data:
             result = data["result"]
@@ -208,59 +299,70 @@ class TwoGISClient:
         
         return None
     
-    async def get_transit_route(
+    async def get_distance_matrix(
         self,
-        start: Tuple[float, float],
-        end: Tuple[float, float]
+        sources: List[Tuple[float, float]],
+        targets: List[Tuple[float, float]],
+        transport: str = "pedestrian"
     ) -> Optional[Dict[str, Any]]:
-        """Get public transit route - NOT IMPLEMENTED for 2GIS free tier"""
-        # 2GIS Public Transport API requires special access
-        # For now, return None to skip transit suggestions
-        logger.info("Transit API not available in current 2GIS plan")
-        return None
-    
-    async def search_places(
-        self,
-        query: str,
-        location: Tuple[float, float],
-        radius: int = 1000,
-        rubric_id: Optional[int] = None,
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """Search for places using 2GIS Places API"""
+        if not sources or not targets:
+            return None
         
-        cache_key = self._cache_key("places", {
-            "q": query,
-            "loc": location,
-            "r": radius,
-            "rubric": rubric_id
+        if len(sources) > 25 or len(targets) > 25:
+            logger.warning(f"Too many points: {len(sources)}×{len(targets)}, truncating")
+            sources = sources[:25]
+            targets = targets[:25]
+        
+        cache_key = self._cache_key("distmatrix", {
+            "sources": sources,
+            "targets": targets,
+            "transport": transport
         })
         
         cached = await self._get_cached(cache_key)
         if cached:
             return cached
         
-        params = {
-            "q": query,
-            "region_id": self.NIZHNY_NOVGOROD_REGION_ID,
-            "location": f"{location[1]},{location[0]}",
-            "radius": radius,
-            "page_size": limit,
-            "fields": "items.point,items.address,items.schedule,items.contact_groups,items.rubrics"
+        formatted_points = [{"lat": lat, "lon": lon} for lat, lon in sources]
+        
+        request_body = {
+            "points": formatted_points,
+            "sources": list(range(len(sources))),
+            "targets": list(range(len(targets))),
         }
         
-        if rubric_id:
-            params["rubric_id"] = rubric_id
+        data = await self._request_post(
+            self.DISTANCE_MATRIX_URL,
+            params={"version": "2.0"},
+            json_body=request_body,
+            timeout=30
+        )
         
-        data = await self._request(self.PLACES_URL, params)
+        if data and "routes" in data:
+            await self._set_cache(cache_key, data, ttl=3600)
+            logger.info(f"✓ Distance matrix: {len(sources)}×{len(targets)}")
+            return data
         
-        places = []
-        if data and "result" in data and "items" in data["result"]:
-            places = data["result"]["items"]
-            await self._set_cache(cache_key, places, ttl=3600)
-            logger.info(f"✓ Found {len(places)} places for '{query}'")
+        return None
+    
+    def parse_distance_matrix(
+        self,
+        matrix_data: Dict[str, Any],
+        num_sources: int,
+        num_targets: int
+    ) -> List[List[float]]:
+        routes = matrix_data.get("routes", [])
+        matrix = [[float('inf')] * num_targets for _ in range(num_sources)]
         
-        return places
+        for route in routes:
+            src = route.get("source_index", 0)
+            tgt = route.get("target_index", 0)
+            dist_m = route.get("distance", 0)
+            
+            if src < num_sources and tgt < num_targets:
+                matrix[src][tgt] = dist_m / 1000.0
+        
+        return matrix
     
     async def search_cafes(
         self,
@@ -268,25 +370,23 @@ class TwoGISClient:
         radius_km: float = 1.0,
         limit: int = 20
     ) -> List[Dict[str, Any]]:
-        """Search for cafes using 2GIS Suggest API + catalog search"""
-        
         cache_key = self._cache_key("cafes", {"loc": location, "r": radius_km})
         cached = await self._get_cached(cache_key)
         if cached:
             return cached
         
-        # Use catalog search with type=branch and specific categories
+        radius_m = int(radius_km * 1000)
+        
         params = {
-            "region_id": self.NIZHNY_NOVGOROD_REGION_ID,
-            "type": "branch",
-            "q": "кафе ресторан",
+            "rubric_id": f"{self.CAFE_RUBRIC_ID},{self.RESTAURANT_RUBRIC_ID}",
             "point": f"{location[1]},{location[0]}",
-            "radius": int(radius_km * 1000),
-            "page_size": limit,
-            "fields": "items.point,items.address_name,items.schedule,items.contact_groups"
+            "radius": radius_m,
+            "sort": "rating",
+            "fields": "items.point,items.address_name,items.schedule,items.contact_groups,items.rubrics",
+            "page_size": min(limit, 10)
         }
         
-        data = await self._request(self.PLACES_URL, params)
+        data = await self._request_get(self.PLACES_URL, params)
         
         cafes = []
         if data and "result" in data and "items" in data["result"]:
@@ -298,12 +398,12 @@ class TwoGISClient:
                     continue
                 
                 parsed = {
-                    "id": item.get("id"),
+                    "id": str(item.get("id", "")),
                     "name": item.get("name", "Кафе"),
                     "lat": point.get("lat"),
                     "lon": point.get("lon"),
                     "address": item.get("address_name", ""),
-                    "rubrics": [],
+                    "rubrics": [r.get("name", "") for r in item.get("rubrics", [])],
                     "schedule": item.get("schedule", {}),
                 }
                 
@@ -321,74 +421,78 @@ class TwoGISClient:
             if cafes:
                 await self._set_cache(cache_key, cafes, ttl=3600)
                 logger.info(f"✓ Found {len(cafes)} cafes near {location}")
-            else:
-                logger.warning(f"No cafes in response for {location}")
-        else:
-            logger.warning(f"Empty response from Places API for {location}")
         
         return cafes
-        
-        parsed_cafes = []
-        for cafe in cafes:
-            point = cafe.get("point", {})
-            
-            parsed = {
-                "id": cafe.get("id"),
-                "name": cafe.get("name", "Unknown Cafe"),
-                "lat": point.get("lat"),
-                "lon": point.get("lon"),
-                "address": cafe.get("address_name", ""),
-                "rubrics": [r.get("name") for r in cafe.get("rubrics", [])],
-                "schedule": cafe.get("schedule", {}),
-            }
-            
-            contact_groups = cafe.get("contact_groups", [])
-            if contact_groups:
-                contacts = contact_groups[0].get("contacts", [])
-                for contact in contacts:
-                    if contact.get("type") == "phone":
-                        parsed["phone"] = contact.get("text")
-                    elif contact.get("type") == "website":
-                        parsed["website"] = contact.get("url")
-            
-            parsed_cafes.append(parsed)
-        
-        return parsed_cafes
     
     def parse_geometry(self, route_data: Dict[str, Any]) -> List[Tuple[float, float]]:
-        """Parse route geometry from 2GIS response"""
-        
         if not route_data:
             return []
         
-        # Try to get geometry from different possible locations
+        # Method 1: Try waypoints first (most accurate for 2GIS v7)
+        waypoints = route_data.get("waypoints", [])
+        if waypoints:
+            points = []
+            for wp in waypoints:
+                if isinstance(wp, dict) and "lat" in wp and "lon" in wp:
+                    points.append((wp["lat"], wp["lon"]))
+            if points:
+                logger.info(f"✓ Parsed {len(points)} points from waypoints")
+                return points
+        
+        # Method 2: maneuvers
+        maneuvers = route_data.get("maneuvers", [])
+        if maneuvers:
+            points = []
+            for m in maneuvers:
+                if isinstance(m, dict):
+                    # Try 'position' first
+                    position = m.get("position")
+                    if position and isinstance(position, dict):
+                        if "lat" in position and "lon" in position:
+                            points.append((position["lat"], position["lon"]))
+                            continue
+                    
+                    # Try 'point' 
+                    point = m.get("point")
+                    if point and isinstance(point, dict):
+                        if "lat" in point and "lon" in point:
+                            points.append((point["lat"], point["lon"]))
+            
+            if points:
+                logger.info(f"✓ Parsed {len(points)} points from maneuvers")
+                return points
+        
+        # Method 3: geometry field
         geometry = route_data.get("geometry")
         
-        if not geometry:
-            # Sometimes it's in maneuvers
-            maneuvers = route_data.get("maneuvers", [])
-            if maneuvers:
-                points = []
-                for m in maneuvers:
-                    point = m.get("point")
-                    if point and "lat" in point and "lon" in point:
-                        points.append((point["lat"], point["lon"]))
-                return points
-            return []
-        
-        # Geometry can be string or dict
         if isinstance(geometry, str):
             try:
                 geometry = json.loads(geometry)
             except:
-                return []
+                pass
         
-        # GeoJSON format: coordinates are [lon, lat]
         if isinstance(geometry, dict):
             coords = geometry.get("coordinates", [])
-            if coords and isinstance(coords[0], list):
-                # LineString: [[lon, lat], [lon, lat], ...]
-                return [(lat, lon) for lon, lat in coords]
+            geom_type = geometry.get("type", "")
+            
+            if geom_type == "LineString" and coords:
+                points = [(lat, lon) for lon, lat in coords]
+                logger.info(f"✓ Parsed {len(points)} points from GeoJSON")
+                return points
+            
+            if geom_type == "MultiLineString" and coords:
+                points = []
+                for line in coords:
+                    points.extend([(lat, lon) for lon, lat in line])
+                logger.info(f"✓ Parsed {len(points)} points from MultiLineString")
+                return points
+        
+        # Debug logging
+        logger.error(f"Could not parse geometry. Available keys: {list(route_data.keys())}")
+        if maneuvers:
+            logger.error(f"First maneuver structure: {maneuvers[0] if maneuvers else 'empty'}")
+        if waypoints:
+            logger.error(f"First waypoint structure: {waypoints[0] if waypoints else 'empty'}")
         
         return []
     
@@ -397,7 +501,6 @@ class TwoGISClient:
         lat1: float, lon1: float,
         lat2: float, lon2: float
     ) -> float:
-        """Haversine distance in kilometers"""
         from math import radians, sin, cos, sqrt, atan2
         
         R = 6371.0

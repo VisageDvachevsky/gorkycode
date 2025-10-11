@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeocodingService:
-    """Geocoding service using 2GIS Geocoder API"""
+    """Geocoding service using 2GIS Places + Geocoding APIs"""
     
     NIZHNY_NOVGOROD_BOUNDS = {
         "lat_min": 56.29,
@@ -21,7 +21,7 @@ class GeocodingService:
         address: str,
         hint_location: Optional[Tuple[float, float]] = None
     ) -> Optional[Tuple[float, float]]:
-        """Convert address to coordinates using 2GIS"""
+        """Convert address OR landmark to coordinates using 2GIS"""
         
         if not address or not address.strip():
             logger.warning("Empty address provided")
@@ -29,10 +29,12 @@ class GeocodingService:
         
         coords = await twogis_client.geocode(address, location=hint_location)
         
-        if coords and self.validate_coordinates(coords[0], coords[1]):
-            return coords
+        if coords:
+            if self.validate_coordinates(coords[0], coords[1]):
+                return coords
+            else:
+                logger.warning(f"Geocoded coordinates {coords} are outside Nizhny Novgorod bounds")
         
-        logger.warning(f"Geocoding failed or out of bounds: {address}")
         return None
     
     async def reverse_geocode(self, lat: float, lon: float) -> Optional[str]:

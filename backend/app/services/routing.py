@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class RoutingService:
-    """Routing service using 2GIS Directions and Public Transport APIs"""
+    """Routing service using 2GIS Routing API v7"""
     
     def __init__(self):
         self.transit_threshold_km = settings.TRANSIT_DISTANCE_THRESHOLD_KM
@@ -79,7 +79,7 @@ class RoutingService:
         start: Tuple[float, float],
         end: Tuple[float, float]
     ) -> Optional[Dict[str, Any]]:
-        """Get public transit route if distance exceeds threshold"""
+        """Get public transit route suggestion (NOT available free tier)"""
         
         distance = self.calculate_distance_km(
             start[0], start[1], end[0], end[1]
@@ -88,74 +88,9 @@ class RoutingService:
         if distance < self.transit_threshold_km:
             return None
         
-        logger.info(f"Distance {distance:.2f}km exceeds threshold, checking transit...")
+        logger.info(f"Transit would be useful for {distance:.2f}km, but API not available")
         
-        transit_data = await twogis_client.get_transit_route(start, end)
-        
-        if not transit_data:
-            return None
-        
-        return self._parse_transit_response(transit_data, distance)
-    
-    def _parse_transit_response(
-        self,
-        data: Dict[str, Any],
-        walking_distance: float
-    ) -> Optional[Dict[str, Any]]:
-        """Parse 2GIS Public Transport API response"""
-        
-        if not data or "routes" not in data:
-            return None
-        
-        routes = data.get("routes", [])
-        if not routes:
-            return None
-        
-        best_route = routes[0]
-        
-        total_duration = best_route.get("total_duration", 0) / 60
-        walking_duration = walking_distance / settings.DEFAULT_WALK_SPEED_KMH * 60
-        
-        if total_duration >= walking_duration * 0.7:
-            logger.info("Transit not faster than walking, skipping")
-            return None
-        
-        legs = best_route.get("legs", [])
-        transit_legs = [leg for leg in legs if leg.get("type") == "pt"]
-        
-        if not transit_legs:
-            return None
-        
-        transport_lines = []
-        for leg in transit_legs:
-            transport = leg.get("transport", {})
-            transport_lines.append({
-                "type": transport.get("type", "bus"),
-                "name": transport.get("name", ""),
-                "color": transport.get("color", ""),
-            })
-        
-        return {
-            "total_duration_min": total_duration,
-            "walking_duration_min": walking_duration,
-            "time_saved_min": walking_duration - total_duration,
-            "transport_lines": transport_lines,
-            "suggestion": self._build_transit_suggestion(transport_lines),
-            "raw": best_route
-        }
-    
-    def _build_transit_suggestion(self, lines: List[Dict[str, Any]]) -> str:
-        """Build human-readable transit suggestion"""
-        
-        if not lines:
-            return ""
-        
-        if len(lines) == 1:
-            line = lines[0]
-            return f"Можно доехать на {line['type']} {line['name']}"
-        else:
-            line_names = [f"{l['type']} {l['name']}" for l in lines]
-            return f"Можно доехать с пересадкой: {' → '.join(line_names)}"
+        return None
     
     def calculate_distance_km(
         self,

@@ -98,7 +98,7 @@ async def plan_route(
     candidate_pois = [poi for poi, _ in scored_pois]
     
     logger.info("Optimizing route...")
-    optimized_route, total_distance = route_planner.optimize_route(
+    optimized_route, total_distance = await route_planner.optimize_route(
         start_lat=start_lat,
         start_lon=start_lon,
         pois=candidate_pois,

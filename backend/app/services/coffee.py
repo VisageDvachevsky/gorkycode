@@ -12,7 +12,7 @@ class CoffeeService:
     """Service for finding cafes using 2GIS Places API"""
     
     def __init__(self):
-        self.search_radius_km = 1.0  # Increased from 0.5 to 1.0 km
+        self.search_radius_km = 1.5
     
     async def find_cafes_near_location(
         self,
@@ -22,18 +22,16 @@ class CoffeeService:
         preferences: Optional[Dict[str, Any]] = None,
         session: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
-        """Find cafes near a location using 2GIS Places API with DB fallback"""
+        """Find cafes near a location using 2GIS Places API"""
         
         radius = radius_km or self.search_radius_km
         
-        # Try 2GIS first
         cafes = await twogis_client.search_cafes(
             location=(lat, lon),
             radius_km=radius,
             limit=20
         )
         
-        # Fallback to database if 2GIS returns nothing
         if not cafes and session:
             from sqlalchemy import select
             from app.models.poi import POI
@@ -44,7 +42,6 @@ class CoffeeService:
             )
             db_cafes = result.scalars().all()
             
-            # Filter by distance
             nearby_cafes = []
             for cafe in db_cafes:
                 dist = twogis_client.calculate_distance(lat, lon, cafe.lat, cafe.lon)
@@ -85,16 +82,13 @@ class CoffeeService:
         filtered = []
         
         for cafe in cafes:
-            skip = False
-            
             if preferences.get("cuisine"):
                 cuisine_pref = preferences["cuisine"].lower()
                 rubrics = [r.lower() for r in cafe.get("rubrics", [])]
                 if not any(cuisine_pref in r for r in rubrics):
                     continue
             
-            if not skip:
-                filtered.append(cafe)
+            filtered.append(cafe)
         
         return filtered if filtered else cafes[:5]
     
@@ -169,11 +163,16 @@ class CoffeeService:
             
             cafe["detour_km"] = detour
         
+        # Sort by detour
         cafes.sort(key=lambda c: c["detour_km"])
         
+        # Return best cafe if detour is acceptable (increased from 0.5 to 0.8km)
         best_cafe = cafes[0]
-        if best_cafe["detour_km"] < 0.3:
+        if best_cafe["detour_km"] < 0.8:
+            logger.info(f"✓ Best cafe found: {best_cafe['name']} (detour: {best_cafe['detour_km']:.2f}km)")
             return best_cafe
+        else:
+            logger.warning(f"Best cafe has too large detour: {best_cafe['detour_km']:.2f}km")
         
         return None
     
