@@ -73,10 +73,10 @@ class RoutePlanner:
     ) -> Optional[np.ndarray]:
         all_points = [(start_lat, start_lon)] + [(poi.lat, poi.lon) for poi in pois]
         
-        if len(all_points) > 25:
-            logger.warning(f"Too many POIs ({len(pois)}), using top 24 only")
-            pois = pois[:24]
-            all_points = [(start_lat, start_lon)] + [(poi.lat, poi.lon) for poi in pois]
+        # 2GIS free tier limit: 10x10 matrix maximum
+        if len(all_points) > 10:
+            logger.warning(f"Too many POIs ({len(pois)}) for Distance Matrix API (max 10 with free tier), using haversine fallback")
+            return None
         
         try:
             matrix_data = await twogis_client.get_distance_matrix(

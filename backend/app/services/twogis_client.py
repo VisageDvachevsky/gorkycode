@@ -250,11 +250,22 @@ class TwoGISClient:
         if len(points) < 2:
             return None
         
-        if len(points) > 5:
-            logger.warning(f"Too many waypoints: {len(points)}, sampling to 5")
-            indices = [0] + list(range(1, len(points)-1, max(1, (len(points)-2)//3))) + [len(points)-1]
-            indices = sorted(set(indices))[:5]
+        # 2GIS Routing API free tier supports up to 10 waypoints
+        if len(points) > 10:
+            logger.warning(f"Too many waypoints: {len(points)}, sampling to 10")
+            indices = [0]  # Start
+            
+            # Add evenly spaced intermediate points
+            step = (len(points) - 2) / 8  # 8 intermediate points
+            for i in range(1, 9):
+                idx = int(1 + i * step)
+                if idx < len(points) - 1:
+                    indices.append(idx)
+            
+            indices.append(len(points) - 1)  # End
+            indices = sorted(set(indices))
             points = [points[i] for i in indices]
+            logger.info(f"Sampled route to {len(points)} waypoints: indices {indices}")
         
         cache_key = self._cache_key("route_walk", {"points": points})
         cached = await self._get_cached(cache_key)
@@ -428,73 +439,90 @@ class TwoGISClient:
         if not route_data:
             return []
         
-        # Method 1: Try waypoints first (most accurate for 2GIS v7)
+        # Method 1: Parse from maneuvers[].outcoming_path.geometry[].selection (WKT format)
+        maneuvers = route_data.get("maneuvers", [])
+        if maneuvers:
+            all_points = []
+            segments_parsed = 0
+            
+            for maneuver_idx, maneuver in enumerate(maneuvers):
+                if not isinstance(maneuver, dict):
+                    continue
+                
+                outcoming_path = maneuver.get("outcoming_path", {})
+                geometry_segments = outcoming_path.get("geometry", [])
+                
+                for seg_idx, segment in enumerate(geometry_segments):
+                    if not isinstance(segment, dict):
+                        continue
+                    
+                    # Parse WKT LINESTRING from 'selection'
+                    selection = segment.get("selection", "")
+                    if selection.startswith("LINESTRING"):
+                        points = self._parse_wkt_linestring(selection)
+                        if points:
+                            all_points.extend(points)
+                            segments_parsed += 1
+            
+            if all_points:
+                # Remove duplicates while preserving order
+                unique_points = []
+                seen = set()
+                for p in all_points:
+                    # Round to 6 decimal places for deduplication
+                    key = (round(p[0], 6), round(p[1], 6))
+                    if key not in seen:
+                        seen.add(key)
+                        unique_points.append(p)
+                
+                logger.info(f"✓ Parsed {len(unique_points)} unique points from {segments_parsed} WKT segments across {len(maneuvers)} maneuvers")
+                return unique_points
+            else:
+                logger.warning(f"Found {len(maneuvers)} maneuvers but no geometry points extracted")
+        
+        # Method 2: Try waypoints (fallback)
         waypoints = route_data.get("waypoints", [])
         if waypoints:
             points = []
             for wp in waypoints:
-                if isinstance(wp, dict) and "lat" in wp and "lon" in wp:
-                    points.append((wp["lat"], wp["lon"]))
-            if points:
-                logger.info(f"✓ Parsed {len(points)} points from waypoints")
-                return points
-        
-        # Method 2: maneuvers
-        maneuvers = route_data.get("maneuvers", [])
-        if maneuvers:
-            points = []
-            for m in maneuvers:
-                if isinstance(m, dict):
-                    # Try 'position' first
-                    position = m.get("position")
-                    if position and isinstance(position, dict):
-                        if "lat" in position and "lon" in position:
-                            points.append((position["lat"], position["lon"]))
-                            continue
-                    
-                    # Try 'point' 
-                    point = m.get("point")
-                    if point and isinstance(point, dict):
-                        if "lat" in point and "lon" in point:
-                            points.append((point["lat"], point["lon"]))
+                if isinstance(wp, dict):
+                    proj = wp.get("projected_point", wp.get("original_point", {}))
+                    if "lat" in proj and "lon" in proj:
+                        points.append((proj["lat"], proj["lon"]))
             
             if points:
-                logger.info(f"✓ Parsed {len(points)} points from maneuvers")
+                logger.info(f"✓ Parsed {len(points)} points from waypoints (fallback)")
                 return points
         
-        # Method 3: geometry field
-        geometry = route_data.get("geometry")
-        
-        if isinstance(geometry, str):
-            try:
-                geometry = json.loads(geometry)
-            except:
-                pass
-        
-        if isinstance(geometry, dict):
-            coords = geometry.get("coordinates", [])
-            geom_type = geometry.get("type", "")
-            
-            if geom_type == "LineString" and coords:
-                points = [(lat, lon) for lon, lat in coords]
-                logger.info(f"✓ Parsed {len(points)} points from GeoJSON")
-                return points
-            
-            if geom_type == "MultiLineString" and coords:
-                points = []
-                for line in coords:
-                    points.extend([(lat, lon) for lon, lat in line])
-                logger.info(f"✓ Parsed {len(points)} points from MultiLineString")
-                return points
-        
-        # Debug logging
         logger.error(f"Could not parse geometry. Available keys: {list(route_data.keys())}")
-        if maneuvers:
-            logger.error(f"First maneuver structure: {maneuvers[0] if maneuvers else 'empty'}")
-        if waypoints:
-            logger.error(f"First waypoint structure: {waypoints[0] if waypoints else 'empty'}")
-        
         return []
+    
+    def _parse_wkt_linestring(self, wkt: str) -> List[Tuple[float, float]]:
+        """Parse WKT LINESTRING format: 'LINESTRING(lon1 lat1, lon2 lat2, ...)'"""
+        try:
+            # Remove 'LINESTRING(' and ')'
+            coords_str = wkt.replace("LINESTRING(", "").replace(")", "").strip()
+            
+            points = []
+            for pair in coords_str.split(","):
+                pair = pair.strip()
+                if not pair:
+                    continue
+                
+                parts = pair.split()
+                if len(parts) >= 2:
+                    lon = float(parts[0])
+                    lat = float(parts[1])
+                    points.append((lat, lon))
+            
+            if not points:
+                logger.warning(f"No points extracted from WKT: {wkt[:100]}...")
+            
+            return points
+            
+        except Exception as e:
+            logger.error(f"Failed to parse WKT LINESTRING: {e}, WKT: {wkt[:100]}...")
+            return []
     
     def calculate_distance(
         self,
