@@ -14,6 +14,7 @@ from app.services.geocoding import geocoding_service
 from app.services.routing import routing_service
 from app.services.coffee import coffee_service
 from app.services.twogis_client import twogis_client
+from app.services.time_scheduler import time_scheduler
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -24,13 +25,14 @@ async def plan_route(
     request: RouteRequest,
     session: AsyncSession = Depends(get_session),
 ) -> RouteResponse:
-    """Generate personalized walking route using 2GIS APIs"""
+    """Generate personalized walking route using 2GIS APIs with smart time management"""
     
     logger.info(f"Route planning started: {request.interests[:50] if request.interests else 'no interests'}...")
     start_time = datetime.now()
     
     await twogis_client.connect_redis()
     
+    # === 1. GEOCODING ===
     if request.start_address:
         logger.info(f"Geocoding address: {request.start_address}")
         coords = await geocoding_service.geocode_address(request.start_address)
@@ -56,6 +58,16 @@ async def plan_route(
             detail="Укажите start_address или start_lat + start_lon"
         )
     
+    # === 2. TIME MANAGEMENT ===
+    route_start_time, time_warnings = time_scheduler.determine_start_time(
+        requested_time=request.start_time,
+        client_timezone_str=request.client_timezone,
+        available_hours=request.hours
+    )
+    
+    logger.info(f"✓ Route start time: {route_start_time.strftime('%Y-%m-%d %H:%M %Z')}")
+    
+    # === 3. EMBEDDING & RANKING ===
     query_parts = []
     if request.social_mode:
         query_parts.append(request.social_mode)
@@ -97,6 +109,7 @@ async def plan_route(
     logger.info(f"Found {len(scored_pois)} candidate POIs")
     candidate_pois = [poi for poi, _ in scored_pois]
     
+    # === 4. ROUTE OPTIMIZATION ===
     logger.info("Optimizing route...")
     optimized_route, total_distance = await route_planner.optimize_route(
         start_lat=start_lat,
@@ -113,6 +126,7 @@ async def plan_route(
     
     logger.info(f"Route optimized: {len(optimized_route)} POIs, {total_distance:.2f}km")
     
+    # === 5. COFFEE BREAKS ===
     if request.coffee_preferences and request.coffee_preferences.enabled:
         logger.info("Adding smart coffee breaks using 2GIS Places API...")
         interval = request.coffee_preferences.interval_minutes
@@ -122,11 +136,13 @@ async def plan_route(
             interval_minutes=interval,
             preferences=request.coffee_preferences.dict(),
             coffee_service=coffee_service,
-            session=session
+            session=session,
+            start_time=route_start_time  # Pass start time for availability check
         )
         
         logger.info(f"Coffee breaks added, total POIs: {len(optimized_route)}")
     
+    # === 6. LLM EXPLANATIONS (with retry) ===
     logger.info("Generating AI explanations...")
     try:
         llm_response = await llm_service.generate_route_explanation(
@@ -135,31 +151,33 @@ async def plan_route(
             social_mode=request.social_mode,
             intensity=request.intensity,
         )
-        logger.info("AI explanations generated")
-    except json.JSONDecodeError as e:
-        logger.error(f"LLM JSON parsing failed: {str(e)}")
-        llm_response = {
-            "summary": "Персональный маршрут создан на основе ваших предпочтений",
-            "explanations": [],
-            "notes": [],
-            "atmospheric_description": None
-        }
+        logger.info("✓ AI explanations generated and validated")
     except Exception as e:
         logger.error(f"LLM generation failed: {str(e)}")
+        # Fallback to minimal response
         llm_response = {
             "summary": "Персональный маршрут создан на основе ваших предпочтений",
-            "explanations": [],
+            "explanations": [
+                {
+                    "poi_id": poi.id,
+                    "why": f"{poi.name} — {poi.description[:200]}",
+                    "tip": poi.local_tip or poi.photo_tip
+                }
+                for poi in optimized_route
+            ],
             "notes": [],
             "atmospheric_description": None
         }
     
     explanations_map = {exp["poi_id"]: exp for exp in llm_response.get("explanations", [])}
     
-    logger.info("Building route timeline...")
-    current_time = datetime.now()
+    # === 7. BUILD TIMELINE WITH TIME CHECKS ===
+    logger.info("Building route timeline with availability checks...")
+    current_time = route_start_time
     route_items = []
     prev_lat, prev_lon = start_lat, start_lon
     transit_suggestions = []
+    poi_timings = []  # For warnings
     
     for order, poi in enumerate(optimized_route, 1):
         walk_time = route_planner.calculate_walk_time_minutes(
@@ -184,6 +202,11 @@ async def plan_route(
         arrival_time = current_time
         leave_time = current_time + timedelta(minutes=poi.avg_visit_minutes)
         
+        # Check POI availability
+        is_open, opening_hours = time_scheduler.check_poi_availability(poi, arrival_time)
+        
+        poi_timings.append((poi, arrival_time, leave_time))
+        
         explanation = explanations_map.get(poi.id, {})
         
         is_coffee_break = (
@@ -199,20 +222,23 @@ async def plan_route(
                 name=poi.name,
                 lat=poi.lat,
                 lon=poi.lon,
-                why=explanation.get("why", f"Интересное место в категории {poi.category}"),
+                why=explanation.get("why", f"{poi.name} — {poi.description[:200]}"),
                 tip=explanation.get("tip", poi.local_tip),
                 est_visit_minutes=poi.avg_visit_minutes,
                 arrival_time=arrival_time,
                 leave_time=leave_time,
                 is_coffee_break=is_coffee_break,
+                is_open=is_open,
+                opening_hours=opening_hours
             )
         )
         
         current_time = leave_time
         prev_lat, prev_lon = poi.lat, poi.lon
     
-    total_minutes = int((current_time - datetime.now()).total_seconds() / 60)
+    total_minutes = int((current_time - route_start_time).total_seconds() / 60)
     
+    # === 8. ROUTE GEOMETRY ===
     logger.info("Calculating real route geometry using 2GIS...")
     try:
         route_geometry = await routing_service.calculate_route_geometry(
@@ -224,7 +250,15 @@ async def plan_route(
         logger.error(f"Route geometry calculation failed: {str(e)}")
         route_geometry = [[start_lat, start_lon]] + [[poi.lat, poi.lon] for poi in optimized_route]
     
+    # === 9. COLLECT NOTES & WARNINGS ===
     notes = llm_response.get("notes", [])
+    
+    # Add time warnings
+    route_time_warnings = time_scheduler.add_time_warnings_to_route(poi_timings)
+    time_warnings.extend(route_time_warnings)
+    
+    if time_warnings:
+        notes.extend(time_warnings)
     
     if transit_suggestions:
         notes.append("💡 Рекомендации по транспорту:")
@@ -242,6 +276,8 @@ async def plan_route(
         notes=notes,
         atmospheric_description=llm_response.get("atmospheric_description"),
         route_geometry=route_geometry,
+        start_time_used=route_start_time,
+        time_warnings=time_warnings
     )
 
 

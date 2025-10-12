@@ -2,28 +2,26 @@
 name = "aitourist-backend"
 version = "0.1.0"
 description = "AI-powered tourist guide for Nizhny Novgorod"
-authors = ["VisageDvachevsky"]
+authors = ["VisageDvachevsky <visage@example.com>"]
 readme = "README.md"
 packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-fastapi = "^0.109.0"
-uvicorn = {extras = ["standard"], version = "^0.27.0"}
-pydantic = "^2.5.0"
-pydantic-settings = "^2.1.0"
-sqlalchemy = "^2.0.25"
-asyncpg = "^0.29.0"
-redis = {extras = ["hiredis"], version = "^5.0.1"}
-openai = "^1.10.0"
-anthropic = "^0.18.1"
-sentence-transformers = "^2.3.1"
-numpy = "^1.26.3"
-scipy = "^1.12.0"
-scikit-learn = "^1.4.0"
-httpx = "^0.26.0"
-orjson = "^3.9.12"
-tenacity = "^8.2.3"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+pydantic = "^2.10.0"
+pydantic-settings = "^2.6.0"
+sqlalchemy = "^2.0.36"
+asyncpg = "^0.30.0"
+redis = "^5.2.0"
+openai = "^1.57.0"
+anthropic = "^0.42.0"
+sentence-transformers = "^3.3.0"
+numpy = "^2.2.0"
+httpx = "^0.28.0"
+orjson = "^3.10.0"
+tenacity = "^9.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"
@@ -37,27 +35,5 @@ ipython = "^8.20.0"
 aiosqlite = "^0.19.0"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.black]
-line-length = 100
-target-version = ['py311']
-
-[tool.isort]
-profile = "black"
-line_length = 100
-
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]

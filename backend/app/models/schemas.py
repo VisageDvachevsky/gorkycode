@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, time as dt_time
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+import pytz
 
 
 class CoffeePreferences(BaseModel):
@@ -24,6 +25,35 @@ class RouteRequest(BaseModel):
     coffee_preferences: Optional[CoffeePreferences] = None
     intensity: str = Field(default="medium", pattern="^(relaxed|medium|intense)$")
     allow_transit: bool = Field(default=True, description="Allow public transit suggestions")
+    
+    # NEW: Time management
+    start_time: Optional[str] = Field(
+        default=None,
+        description="Preferred start time in HH:MM format (client timezone)"
+    )
+    client_timezone: str = Field(
+        default="Europe/Moscow",
+        description="Client timezone (IANA format)"
+    )
+    
+    @field_validator('start_time')
+    @classmethod
+    def validate_start_time(cls, v):
+        if v is not None:
+            try:
+                datetime.strptime(v, "%H:%M")
+            except ValueError:
+                raise ValueError("start_time must be in HH:MM format")
+        return v
+    
+    @field_validator('client_timezone')
+    @classmethod
+    def validate_timezone(cls, v):
+        try:
+            pytz.timezone(v)
+        except pytz.exceptions.UnknownTimeZoneError:
+            raise ValueError(f"Unknown timezone: {v}")
+        return v
 
 
 class POIInRoute(BaseModel):
@@ -38,6 +68,8 @@ class POIInRoute(BaseModel):
     arrival_time: datetime
     leave_time: datetime
     is_coffee_break: bool = False
+    is_open: bool = True  # NEW: Is this POI open at arrival time?
+    opening_hours: Optional[str] = None  # NEW: Opening hours info
 
 
 class RouteResponse(BaseModel):
@@ -48,6 +80,8 @@ class RouteResponse(BaseModel):
     notes: List[str] = []
     atmospheric_description: Optional[str] = None
     route_geometry: Optional[List[List[float]]] = None
+    start_time_used: datetime  # NEW: Actual start time used
+    time_warnings: List[str] = []  # NEW: Warnings about timing
 
 
 class EmbeddingRequest(BaseModel):

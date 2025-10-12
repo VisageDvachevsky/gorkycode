@@ -361,71 +361,96 @@ class RoutePlanner:
         return ordered_route, total_distance
     
     async def insert_smart_coffee_breaks(
-        self,
-        route: List[POI],
-        interval_minutes: int,
-        preferences: Dict[str, Any],
-        coffee_service: "CoffeeService",
-        session: Any = None
-    ) -> List[POI]:
-        if not route or len(route) < 2:
-            return route
+    self,
+    route: List[POI],
+    interval_minutes: int,
+    preferences: Dict[str, Any],
+    coffee_service: "CoffeeService",
+    session: Any = None,
+    start_time: Optional[datetime] = None  # NEW parameter
+) -> List[POI]:
+    """Insert smart coffee breaks with time-aware validation"""
+    if not route or len(route) < 2:
+        return route
+    
+    result = []
+    time_since_last_break = 0
+    coffee_added = False
+    
+    # Calculate current time if provided
+    current_time = start_time if start_time else datetime.now()
+    
+    for i, poi in enumerate(route):
+        result.append(poi)
         
-        result = []
-        time_since_last_break = 0
-        coffee_added = False
+        # Update current time
+        current_time += timedelta(minutes=poi.avg_visit_minutes)
+        time_since_last_break += poi.avg_visit_minutes
         
-        for i, poi in enumerate(route):
-            result.append(poi)
-            time_since_last_break += poi.avg_visit_minutes
+        should_add_coffee = (
+            time_since_last_break >= interval_minutes or
+            (i == len(route) // 2 and not coffee_added and len(route) > 3)
+        )
+        
+        if should_add_coffee and i < len(route) - 1:
+            next_poi = route[i + 1]
             
-            # Add coffee break if:
-            # 1. Time threshold reached, OR
-            # 2. It's the middle of the route and no coffee added yet
-            should_add_coffee = (
-                time_since_last_break >= interval_minutes or
-                (i == len(route) // 2 and not coffee_added and len(route) > 3)
+            cafe_data = await coffee_service.find_best_cafe_for_route(
+                from_poi=poi,
+                to_poi=next_poi,
+                preferences=preferences,
+                session=session
             )
             
-            if should_add_coffee and i < len(route) - 1:
-                next_poi = route[i + 1]
+            if cafe_data:
+                # Check if cafe is open at current_time
+                from app.services.time_scheduler import time_scheduler
                 
-                cafe_data = await coffee_service.find_best_cafe_for_route(
-                    from_poi=poi,
-                    to_poi=next_poi,
-                    preferences=preferences,
-                    session=session
-                )
+                is_open = time_scheduler.validate_cafe_timing(cafe_data, current_time)
                 
-                if cafe_data:
+                if not is_open:
+                    logger.warning(
+                        f"Skipping {cafe_data['name']} - closed at {current_time.strftime('%H:%M')}"
+                    )
+                    continue
+                
+                cafe_poi = coffee_service.convert_to_poi(cafe_data)
+                
+                if cafe_poi.id not in [p.id for p in result]:
+                    result.append(cafe_poi)
+                    time_since_last_break = 0
+                    coffee_added = True
+                    current_time += timedelta(minutes=cafe_poi.avg_visit_minutes)
+                    logger.info(f"✓ Added coffee break: {cafe_poi.name} (open at {current_time.strftime('%H:%M')})")
+    
+    if not coffee_added and len(route) >= 2:
+        logger.info("No coffee break added by interval, trying middle...")
+        mid_idx = len(route) // 2
+        if mid_idx < len(route) - 1:
+            cafe_data = await coffee_service.find_best_cafe_for_route(
+                from_poi=route[mid_idx],
+                to_poi=route[mid_idx + 1],
+                preferences=preferences,
+                session=session
+            )
+            
+            if cafe_data:
+                # Calculate time at middle
+                mid_time = start_time if start_time else datetime.now()
+                for poi in route[:mid_idx+1]:
+                    mid_time += timedelta(minutes=poi.avg_visit_minutes)
+                
+                from app.services.time_scheduler import time_scheduler
+                is_open = time_scheduler.validate_cafe_timing(cafe_data, mid_time)
+                
+                if is_open:
                     cafe_poi = coffee_service.convert_to_poi(cafe_data)
-                    
-                    if cafe_poi.id not in [p.id for p in result]:
-                        result.append(cafe_poi)
-                        time_since_last_break = 0
-                        coffee_added = True
-                        logger.info(f"✓ Added coffee break: {cafe_poi.name}")
-        
-        # If no coffee was added but user wanted coffee, try to add at least one
-        if not coffee_added and len(route) >= 2:
-            mid_idx = len(route) // 2
-            if mid_idx < len(route) - 1:
-                logger.info("No coffee break added by interval, adding one in the middle")
-                
-                cafe_data = await coffee_service.find_best_cafe_for_route(
-                    from_poi=route[mid_idx],
-                    to_poi=route[mid_idx + 1],
-                    preferences=preferences,
-                    session=session
-                )
-                
-                if cafe_data:
-                    cafe_poi = coffee_service.convert_to_poi(cafe_data)
-                    # Insert in the middle
                     result.insert(mid_idx + 1, cafe_poi)
                     logger.info(f"✓ Added guaranteed coffee break: {cafe_poi.name}")
-        
-        return result
+                else:
+                    logger.warning(f"Middle cafe {cafe_data['name']} closed at {mid_time.strftime('%H:%M')}")
+    
+    return result
 
 
 route_planner = RoutePlanner()
