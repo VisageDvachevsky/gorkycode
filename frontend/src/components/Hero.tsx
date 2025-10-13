@@ -35,13 +35,13 @@ export default function Hero({ onStartJourney }: HeroProps) {
         {/* Feature highlights */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
           {[
-            { icon: '🎯', title: 'Персонально', desc: 'Под твои интересы' },
-            { icon: '⚡', title: 'Быстро', desc: 'За 30 секунд' },
-            { icon: '☕', title: 'С кофе', desc: 'Кафе по пути' },
-            { icon: '🤖', title: 'С AI', desc: 'Умные объяснения' }
+            { id: 'personal', icon: '🎯', title: 'Персонально', desc: 'Под твои интересы' },
+            { id: 'fast', icon: '⚡', title: 'Быстро', desc: 'За 30 секунд' },
+            { id: 'coffee', icon: '☕', title: 'С кофе', desc: 'Кафе по пути' },
+            { id: 'ai', icon: '🤖', title: 'С AI', desc: 'Умные объяснения' }
           ].map((feature, index) => (
             <div
-              key={feature.title}
+              key={feature.id}
               className="group relative animate-fade-in-up"
               style={{ animationDelay: `${0.4 + index * 0.1}s` }}
             >
