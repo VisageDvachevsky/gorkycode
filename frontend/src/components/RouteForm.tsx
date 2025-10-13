@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useMutation, useQuery } from '@tantml:react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { Clock, MapPin, Users, Zap, Calendar, Coffee, Bus } from 'lucide-react'

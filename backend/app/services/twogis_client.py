@@ -6,7 +6,7 @@ from enum import Enum
 
 import httpx
 import redis.asyncio as redis
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.core.config import settings
 
@@ -68,6 +68,7 @@ class TwoGISClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=5),
+        retry=retry_if_exception_type(httpx.HTTPError)
     )
     async def _request_get(
         self,
@@ -107,6 +108,7 @@ class TwoGISClient:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=5),
+        retry=retry_if_exception_type(httpx.HTTPError)
     )
     async def _request_post(
         self,
