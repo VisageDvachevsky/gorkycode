@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import { Clock, MapPin, Users, Zap, Calendar, Coffee, Bus } from 'lucide-react'
+import { Clock, MapPin, Users, Zap, Calendar, Coffee, Bus, Sparkles } from 'lucide-react'
 import { api } from '../api/client'
 import type { RouteRequest, RouteResponse, Category, CoffeePreferences } from '../types'
 import 'leaflet/dist/leaflet.css'
@@ -39,9 +39,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
   const [showMap, setShowMap] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [formProgress, setFormProgress] = useState(0)
   const [showCoffeeAdvanced, setShowCoffeeAdvanced] = useState(false)
-  const [currentStep, setCurrentStep] = useState(1)
   
   const [formData, setFormData] = useState<RouteRequest>({
     interests: '',
@@ -73,18 +71,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
       onRouteGenerated(data)
     },
   })
-
-  useEffect(() => {
-    let progress = 0
-    
-    if (formData.interests.trim() || selectedCategories.length > 0) progress += 25
-    if (formData.hours) progress += 20
-    if (locationType === 'address' ? formData.start_address : (formData.start_lat !== undefined && formData.start_lon !== undefined)) progress += 25
-    if (formData.start_time) progress += 10
-    progress += 20
-    
-    setFormProgress(Math.min(progress, 100))
-  }, [formData, selectedCategories, locationType])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -138,247 +124,217 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     )
   }
 
-  const steps = [
-    { num: 1, title: 'Интересы', icon: '✨' },
-    { num: 2, title: 'Детали', icon: '⚙️' },
-    { num: 3, title: 'Локация', icon: '📍' },
-    { num: 4, title: 'Время', icon: '🕐' },
-  ]
-
   return (
-    <div className="relative">
-      {/* Progress indicator */}
-      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200 px-8 py-4 mb-6 rounded-2xl shadow-lg animate-slideInUp">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 animate-pulse">
-              Создать маршрут
-            </h2>
-            <p className="text-gray-500 mt-1 text-sm">Ваша персональная прогулка за 4 шага</p>
-          </div>
-          <div className="text-right">
-            <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-emerald-600">
-              {formProgress}%
-            </div>
-            <div className="text-xs text-gray-500 uppercase tracking-wider">Готовность</div>
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-8 max-w-5xl mx-auto">
+      {/* Form header */}
+      <div className="text-center mb-12 animate-fade-in">
+        <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full backdrop-blur-xl bg-white/5 border border-white/10 mb-6">
+          <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+          <span className="text-blue-300">Заполните форму, чтобы создать маршрут</span>
         </div>
-        
-        {/* Progress bar */}
-        <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden">
-          <div 
-            className="absolute h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-1000 ease-out rounded-full"
-            style={{ width: `${formProgress}%` }}
-          >
-            <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-          </div>
-        </div>
-
-        {/* Step indicators */}
-        <div className="flex justify-between mt-6">
-          {steps.map((step, idx) => (
-            <div
-              key={step.num}
-              className={`flex flex-col items-center transition-all duration-300 ${
-                currentStep >= step.num
-                  ? 'opacity-100 scale-100'
-                  : 'opacity-40 scale-90'
-              }`}
-            >
-              <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold transition-all duration-300 ${
-                  currentStep >= step.num
-                    ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg scale-110'
-                    : 'bg-gray-200 text-gray-500'
-                }`}
-              >
-                {step.icon}
-              </div>
-              <span className="text-xs mt-2 font-semibold text-gray-600">{step.title}</span>
-            </div>
-          ))}
-        </div>
+        <h2 className="text-5xl sm:text-6xl font-black bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">
+          Создаём маршрут
+        </h2>
+        <p className="text-xl text-blue-300/70">Расскажите о себе, и AI подберёт идеальные места</p>
       </div>
-      
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Step 1: Interests */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8 hover:shadow-3xl transition-all duration-300 animate-fadeIn border-2 border-transparent hover:border-blue-300">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="text-4xl">✨</div>
+
+      {/* Step 1: Interests */}
+      <div className="group relative animate-slide-in-left">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all" />
+        <div className="relative backdrop-blur-2xl bg-white/10 border border-white/20 rounded-3xl p-8 hover:border-white/40 transition-all">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl blur-lg opacity-50" />
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                <span className="text-3xl">✨</span>
+              </div>
+            </div>
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Шаг 1: Что вас интересует?</h3>
-              <p className="text-sm text-gray-500">Расскажите о своих предпочтениях</p>
+              <h3 className="text-3xl font-black text-white">Ваши интересы</h3>
+              <p className="text-blue-300/70">Что вам нравится?</p>
             </div>
           </div>
           
           <textarea
             value={formData.interests}
-            onChange={(e) => {
-              setFormData({ ...formData, interests: e.target.value })
-              setCurrentStep(Math.max(currentStep, 1))
-            }}
-            placeholder="Например: советские мозаики, панорамные виды, исторические здания, уличное искусство..."
-            className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 transition-all resize-none hover:border-gray-300 text-lg"
+            onChange={(e) => setFormData({ ...formData, interests: e.target.value })}
+            placeholder="Например: уличное искусство, панорамные виды, советская архитектура, атмосферные кафе..."
+            className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all resize-none text-white placeholder-blue-300/30 hover:border-white/20 text-lg backdrop-blur-xl"
             rows={4}
           />
           
           {formData.interests.trim() && (
-            <div className="text-sm text-green-600 bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-3 rounded-xl mt-3 flex items-center gap-3 animate-slideInLeft border-2 border-green-200">
-              <span className="text-2xl">✓</span>
-              <span className="font-semibold">Отлично! Интересы указаны</span>
+            <div className="mt-4 flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-green-500/20 to-emerald-500/20 rounded-2xl border border-green-500/30 animate-fade-in">
+              <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                <span className="text-white font-bold">✓</span>
+              </div>
+              <span className="text-green-200 font-semibold">Отлично! Интересы учтены</span>
             </div>
           )}
 
           {/* Categories */}
-          <div className="mt-6">
-            <label className="block text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🏷️</span>
+          <div className="mt-8">
+            <label className="block text-xl font-bold text-white mb-6 flex items-center gap-3">
+              <span className="text-3xl">🏷️</span>
               Или выберите категории
             </label>
             
             {categoriesLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="relative">
-                  <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full animate-pulse"></div>
-                  </div>
+              <div className="flex items-center justify-center py-16">
+                <div className="relative w-20 h-20">
+                  <div className="absolute inset-0 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  <div className="absolute inset-2 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin-reverse" />
                 </div>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {categories.map((cat, index) => (
                   <button
                     key={cat.value}
                     type="button"
-                    onClick={() => {
-                      toggleCategory(cat.value)
-                      setCurrentStep(Math.max(currentStep, 1))
-                    }}
-                    className={`group relative px-6 py-3 rounded-2xl text-sm font-bold transition-all duration-300 transform hover:scale-110 animate-scaleIn ${
+                    onClick={() => toggleCategory(cat.value)}
+                    className={`group relative px-6 py-4 rounded-2xl text-sm font-bold transition-all transform hover:scale-105 animate-fade-in ${
                       selectedCategories.includes(cat.value)
-                        ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-2xl'
-                        : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 shadow-md'
+                        ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-2xl shadow-blue-500/50'
+                        : 'bg-white/5 text-blue-200 border border-white/10 hover:border-white/30 backdrop-blur-xl'
                     }`}
-                    style={{ animationDelay: `${index * 30}ms` }}
+                    style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <span className="relative z-10">{cat.label} ({cat.count})</span>
                     {selectedCategories.includes(cat.value) && (
-                      <div className="absolute inset-0 bg-white/20 rounded-2xl animate-pulse"></div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl animate-pulse opacity-50" />
                     )}
+                    <span className="relative block">{cat.label}</span>
+                    <span className="relative block text-xs mt-1 opacity-70">({cat.count})</span>
                   </button>
                 ))}
               </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Step 2: Details */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8 hover:shadow-3xl transition-all duration-300 animate-fadeIn" style={{ animationDelay: '100ms' }}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="text-4xl">⚙️</div>
+      {/* Step 2: Details */}
+      <div className="group relative animate-slide-in-right" style={{ animationDelay: '100ms' }}>
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all" />
+        <div className="relative backdrop-blur-2xl bg-white/10 border border-white/20 rounded-3xl p-8 hover:border-white/40 transition-all">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur-lg opacity-50" />
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                <span className="text-3xl">⚙️</span>
+              </div>
+            </div>
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Шаг 2: Детали прогулки</h3>
-              <p className="text-sm text-gray-500">Настройте параметры маршрута</p>
+              <h3 className="text-3xl font-black text-white">Детали</h3>
+              <p className="text-blue-300/70">Настройки прогулки</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Duration */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                <Clock className="w-5 h-5 text-blue-600" />
-                Длительность прогулки
+              <label className="flex items-center gap-3 text-lg font-bold text-white">
+                <Clock className="w-6 h-6 text-cyan-400" />
+                Длительность
               </label>
-              <div className="relative">
+              <div className="relative group/input">
                 <input
                   type="number"
                   value={formData.hours}
-                  onChange={(e) => {
-                    setFormData({ ...formData, hours: parseFloat(e.target.value) || 3 })
-                    setCurrentStep(Math.max(currentStep, 2))
-                  }}
+                  onChange={(e) => setFormData({ ...formData, hours: parseFloat(e.target.value) || 3 })}
                   min="0.5"
                   max="12"
                   step="0.5"
-                  className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 transition-all hover:border-gray-300 text-lg font-semibold"
+                  className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-cyan-500/30 focus:border-cyan-500/50 transition-all text-white text-2xl font-black hover:border-white/20 backdrop-blur-xl group-hover/input:scale-105"
                   required
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-semibold">
+                <div className="absolute right-6 top-1/2 -translate-y-1/2 text-cyan-400/70 font-semibold pointer-events-none">
                   часов
                 </div>
               </div>
-              <span className="text-xs text-gray-500 block">от 0.5 до 12 часов</span>
             </div>
 
             {/* Social mode */}
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                <Users className="w-5 h-5 text-indigo-600" />
-                С кем идёте?
+              <label className="flex items-center gap-3 text-lg font-bold text-white">
+                <Users className="w-6 h-6 text-purple-400" />
+                Компания
               </label>
               <select
                 value={formData.social_mode}
-                onChange={(e) => {
-                  setFormData({ ...formData, social_mode: e.target.value as any })
-                  setCurrentStep(Math.max(currentStep, 2))
-                }}
-                className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all hover:border-gray-300 text-lg font-semibold appearance-none bg-white cursor-pointer"
+                onChange={(e) => setFormData({ ...formData, social_mode: e.target.value as any })}
+                className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-purple-500/30 focus:border-purple-500/50 transition-all text-white text-lg font-semibold hover:border-white/20 backdrop-blur-xl appearance-none cursor-pointer hover:scale-105"
               >
                 <option value="solo">🚶 Один/одна</option>
                 <option value="friends">👥 С друзьями</option>
                 <option value="family">👨‍👩‍👧 С семьёй</option>
               </select>
             </div>
+
+            {/* Start time */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 text-lg font-bold text-white">
+                <Calendar className="w-6 h-6 text-orange-400" />
+                Время старта
+              </label>
+              <input
+                type="time"
+                value={formData.start_time || ''}
+                onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-orange-500/30 focus:border-orange-500/50 transition-all text-white text-lg font-semibold hover:border-white/20 backdrop-blur-xl hover:scale-105"
+              />
+            </div>
           </div>
 
           {/* Intensity */}
-          <div className="mt-6 space-y-3">
-            <label className="flex items-center gap-2 text-sm font-bold text-gray-700">
-              <Zap className="w-5 h-5 text-purple-600" />
-              Интенсивность прогулки
+          <div className="mt-8 space-y-4">
+            <label className="flex items-center gap-3 text-lg font-bold text-white">
+              <Zap className="w-6 h-6 text-yellow-400" />
+              Интенсивность
             </label>
             <div className="grid grid-cols-3 gap-4">
               {[
-                { value: 'relaxed', emoji: '🌸', label: 'Спокойно', gradient: 'from-green-400 to-emerald-500' },
-                { value: 'medium', emoji: '⚡', label: 'Средне', gradient: 'from-blue-400 to-indigo-500' },
-                { value: 'intense', emoji: '🔥', label: 'Интенсивно', gradient: 'from-orange-400 to-red-500' }
+                { value: 'relaxed', emoji: '🌸', label: 'Спокойно', gradient: 'from-green-500 to-emerald-600' },
+                { value: 'medium', emoji: '⚡', label: 'Средне', gradient: 'from-blue-500 to-indigo-600' },
+                { value: 'intense', emoji: '🔥', label: 'Активно', gradient: 'from-orange-500 to-red-600' }
               ].map((level) => (
                 <button
                   key={level.value}
                   type="button"
-                  onClick={() => {
-                    setFormData({ ...formData, intensity: level.value as any })
-                    setCurrentStep(Math.max(currentStep, 2))
-                  }}
-                  className={`relative px-6 py-6 rounded-2xl text-sm font-bold transition-all duration-300 transform hover:scale-105 group ${
+                  onClick={() => setFormData({ ...formData, intensity: level.value as any })}
+                  className={`relative px-6 py-6 rounded-2xl font-bold transition-all transform hover:scale-110 ${
                     formData.intensity === level.value
                       ? `bg-gradient-to-br ${level.gradient} text-white shadow-2xl scale-105`
-                      : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700 hover:shadow-lg'
+                      : 'bg-white/5 text-blue-200 border border-white/10 hover:border-white/30 backdrop-blur-xl'
                   }`}
                 >
-                  <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">{level.emoji}</div>
-                  <div>{level.label}</div>
-                  {formData.intensity === level.value && (
-                    <div className="absolute inset-0 bg-white/20 rounded-2xl animate-pulse"></div>
-                  )}
+                  <div className="text-5xl mb-2 transform transition-transform">{level.emoji}</div>
+                  <div className="text-lg">{level.label}</div>
                 </button>
               ))}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Step 3: Location */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8 hover:shadow-3xl transition-all duration-300 animate-fadeIn" style={{ animationDelay: '200ms' }}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="text-4xl">📍</div>
+      {/* Step 3: Location */}
+      <div className="group relative animate-slide-in-left" style={{ animationDelay: '200ms' }}>
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all" />
+        <div className="relative backdrop-blur-2xl bg-white/10 border border-white/20 rounded-3xl p-8 hover:border-white/40 transition-all">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl blur-lg opacity-50" />
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                <MapPin className="w-8 h-8 text-white" />
+              </div>
+            </div>
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Шаг 3: Точка старта</h3>
-              <p className="text-sm text-gray-500">Откуда начнём прогулку?</p>
+              <h3 className="text-3xl font-black text-white">Точка старта</h3>
+              <p className="text-blue-300/70">Откуда начнём?</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3 mb-6">
+          <div className="flex flex-wrap gap-4 mb-6">
             {[
               { value: 'address', icon: '📍', label: 'Адрес', color: 'from-red-500 to-pink-600' },
               { value: 'coords', icon: '🗺️', label: 'Координаты', color: 'from-blue-500 to-cyan-600' },
@@ -389,7 +345,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
                 type="button"
                 onClick={() => {
                   setLocationType(type.value as any)
-                  setCurrentStep(Math.max(currentStep, 3))
                   if (type.value === 'map') {
                     setShowMap(true)
                     setFormData({ 
@@ -414,59 +369,59 @@ export default function RouteForm({ onRouteGenerated }: Props) {
                     })
                   }
                 }}
-                className={`px-6 py-3 rounded-2xl text-sm font-bold transition-all duration-300 transform hover:scale-105 ${
+                className={`px-8 py-4 rounded-2xl font-bold transition-all transform hover:scale-105 ${
                   locationType === type.value
                     ? `bg-gradient-to-r ${type.color} text-white shadow-2xl scale-105`
-                    : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:shadow-lg'
+                    : 'bg-white/5 text-blue-200 border border-white/10 hover:border-white/30 backdrop-blur-xl'
                 }`}
               >
-                <span className="mr-2 text-xl">{type.icon}</span>
+                <span className="text-2xl mr-3">{type.icon}</span>
                 {type.label}
               </button>
             ))}
           </div>
 
           {locationType === 'address' && (
-            <div className="animate-fadeIn">
+            <div className="animate-fade-in">
               <input
                 type="text"
                 value={formData.start_address || ''}
                 onChange={(e) => setFormData({ ...formData, start_address: e.target.value })}
                 placeholder="Например: площадь Минина и Пожарского"
-                className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 transition-all hover:border-gray-300 text-lg"
+                className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all text-white text-lg hover:border-white/20 backdrop-blur-xl placeholder-blue-300/30"
               />
             </div>
           )}
 
           {locationType === 'coords' && (
-            <div className="grid grid-cols-2 gap-4 animate-fadeIn">
+            <div className="grid grid-cols-2 gap-4 animate-fade-in">
               <div>
-                <label className="text-xs text-gray-500 mb-2 block font-semibold">Широта</label>
+                <label className="text-sm text-blue-300/70 mb-2 block font-semibold">Широта</label>
                 <input
                   type="number"
                   value={formData.start_lat ?? ''}
                   onChange={(e) => setFormData({ ...formData, start_lat: e.target.value ? parseFloat(e.target.value) : undefined })}
                   step="0.0001"
                   placeholder="56.3287"
-                  className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 transition-all hover:border-gray-300"
+                  className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all text-white hover:border-white/20 backdrop-blur-xl"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 mb-2 block font-semibold">Долгота</label>
+                <label className="text-sm text-blue-300/70 mb-2 block font-semibold">Долгота</label>
                 <input
                   type="number"
                   value={formData.start_lon ?? ''}
                   onChange={(e) => setFormData({ ...formData, start_lon: e.target.value ? parseFloat(e.target.value) : undefined })}
                   step="0.0001"
                   placeholder="44.002"
-                  className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500 transition-all hover:border-gray-300"
+                  className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all text-white hover:border-white/20 backdrop-blur-xl"
                 />
               </div>
             </div>
           )}
 
           {locationType === 'map' && showMap && (
-            <div className="h-80 rounded-2xl overflow-hidden border-4 border-gray-200 shadow-lg animate-fadeIn hover:border-blue-300 transition-all">
+            <div className="h-96 rounded-2xl overflow-hidden border-4 border-white/20 shadow-2xl animate-fade-in hover:border-white/40 transition-all">
               <MapContainer
                 center={[formData.start_lat ?? DEFAULT_CENTER.lat, formData.start_lon ?? DEFAULT_CENTER.lon]}
                 zoom={13}
@@ -482,88 +437,36 @@ export default function RouteForm({ onRouteGenerated }: Props) {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Step 4: Time */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8 hover:shadow-3xl transition-all duration-300 animate-fadeIn" style={{ animationDelay: '300ms' }}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="text-4xl">🕐</div>
-            <div>
-              <h3 className="text-2xl font-bold text-gray-900">Шаг 4: Время прогулки</h3>
-              <p className="text-sm text-gray-500">Когда хотите начать?</p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
-                <Calendar className="w-5 h-5 text-orange-600" />
-                Желаемое время старта (необязательно)
-              </label>
-              <input
-                type="time"
-                value={formData.start_time || ''}
-                onChange={(e) => {
-                  setFormData({ ...formData, start_time: e.target.value })
-                  setCurrentStep(Math.max(currentStep, 4))
-                }}
-                className="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-orange-500/30 focus:border-orange-500 transition-all hover:border-gray-300 text-lg font-semibold"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Если не указано — маршрут будет спланирован на ближайшее удобное время
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl border-2 border-blue-200">
-              <div className="flex items-start gap-3">
-                <div className="text-3xl">💡</div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-gray-900 mb-2">Умное планирование времени</h4>
-                  <ul className="text-sm text-gray-700 space-y-2">
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-600">✓</span>
-                      Проверим расписание работы мест
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-600">✓</span>
-                      Учтём ваш часовой пояс
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-green-600">✓</span>
-                      Предложим оптимальное время, если указанное неудобно
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Coffee & Transit */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn" style={{ animationDelay: '400ms' }}>
-          {/* Coffee */}
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-4 border-amber-300 rounded-3xl p-8 hover:shadow-2xl transition-all duration-300">
-            <label className="flex items-center space-x-4 cursor-pointer group">
+      {/* Coffee & Transit */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in" style={{ animationDelay: '300ms' }}>
+        {/* Coffee */}
+        <div className="group relative">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-600 to-orange-600 rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all" />
+          <div className="relative backdrop-blur-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-400/30 rounded-3xl p-8 hover:border-amber-400/50 transition-all">
+            <label className="flex items-center gap-4 cursor-pointer group/label">
               <input
                 type="checkbox"
                 checked={coffeePrefs.enabled}
                 onChange={(e) => setCoffeePrefs({ ...coffeePrefs, enabled: e.target.checked })}
-                className="w-7 h-7 rounded-xl text-amber-600 focus:ring-amber-500 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-xl text-amber-600 focus:ring-amber-500 transition-all cursor-pointer"
               />
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Coffee className="w-6 h-6 text-amber-600" />
-                  <span className="text-lg font-black text-gray-900">Кофе-брейки</span>
+                <div className="flex items-center gap-3 mb-1">
+                  <Coffee className="w-7 h-7 text-amber-400" />
+                  <span className="text-2xl font-black text-white">Кофе-брейки</span>
                 </div>
-                <p className="text-xs text-gray-600">Умный поиск кафе через 2GIS</p>
+                <p className="text-sm text-amber-200/70">2GIS найдёт лучшие кафе</p>
               </div>
             </label>
             
             {coffeePrefs.enabled && (
-              <div className="mt-6 space-y-4 animate-fadeIn">
+              <div className="mt-6 space-y-4 animate-fade-in">
                 <div>
-                  <div className="flex justify-between text-sm font-bold text-gray-700 mb-2">
-                    <span>Интервал перерывов</span>
-                    <span className="text-amber-700">{coffeePrefs.interval_minutes} мин</span>
+                  <div className="flex justify-between text-sm font-bold text-white mb-3">
+                    <span>Интервал</span>
+                    <span className="text-amber-300">{coffeePrefs.interval_minutes} мин</span>
                   </div>
                   <input
                     type="range"
@@ -572,172 +475,99 @@ export default function RouteForm({ onRouteGenerated }: Props) {
                     min="30"
                     max="180"
                     step="15"
-                    className="w-full h-3 bg-amber-200 rounded-full appearance-none cursor-pointer accent-amber-600"
+                    className="w-full h-4 bg-amber-900/30 rounded-full appearance-none cursor-pointer accent-amber-500"
                   />
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={() => setShowCoffeeAdvanced(!showCoffeeAdvanced)}
-                  className="text-sm text-amber-700 font-bold hover:text-amber-800 flex items-center gap-2 transition-colors"
-                >
-                  <span className="transform transition-transform" style={{ transform: showCoffeeAdvanced ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                  Дополнительные настройки
-                </button>
-                
-                {showCoffeeAdvanced && (
-                  <div className="space-y-4 animate-fadeIn bg-white/50 p-4 rounded-xl">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-gray-700 mb-1 block">Кухня</label>
-                        <select
-                          value={coffeePrefs.cuisine || ''}
-                          onChange={(e) => setCoffeePrefs({ ...coffeePrefs, cuisine: e.target.value || undefined })}
-                          className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500"
-                        >
-                          <option value="">Любая</option>
-                          <option value="italian">Итальянская</option>
-                          <option value="french">Французская</option>
-                          <option value="japanese">Японская</option>
-                          <option value="asian">Азиатская</option>
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="text-xs font-bold text-gray-700 mb-1 block">Диета</label>
-                        <select
-                          value={coffeePrefs.dietary || ''}
-                          onChange={(e) => setCoffeePrefs({ ...coffeePrefs, dietary: e.target.value || undefined })}
-                          className="w-full px-3 py-2 border-2 border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500"
-                        >
-                          <option value="">Без ограничений</option>
-                          <option value="vegetarian">Вегетарианская</option>
-                          <option value="vegan">Веганская</option>
-                          <option value="halal">Халяль</option>
-                          <option value="kosher">Кошерная</option>
-                        </select>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-4">
-                      <label className="flex items-center space-x-2 text-sm cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={coffeePrefs.outdoor_seating}
-                          onChange={(e) => setCoffeePrefs({ ...coffeePrefs, outdoor_seating: e.target.checked })}
-                          className="rounded-lg text-amber-600"
-                        />
-                        <span className="group-hover:text-amber-700 transition-colors">🪑 Терраса</span>
-                      </label>
-                      
-                      <label className="flex items-center space-x-2 text-sm cursor-pointer group">
-                        <input
-                          type="checkbox"
-                          checked={coffeePrefs.wifi}
-                          onChange={(e) => setCoffeePrefs({ ...coffeePrefs, wifi: e.target.checked })}
-                          className="rounded-lg text-amber-600"
-                        />
-                        <span className="group-hover:text-amber-700 transition-colors">📶 Wi-Fi</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Transit */}
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-4 border-green-300 rounded-3xl p-8 hover:shadow-2xl transition-all duration-300">
-            <label className="flex items-center space-x-4 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={formData.allow_transit}
-                onChange={(e) => setFormData({ ...formData, allow_transit: e.target.checked })}
-                className="w-7 h-7 rounded-xl text-green-600 focus:ring-green-500 transition-all cursor-pointer"
-              />
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <Bus className="w-6 h-6 text-green-600" />
-                  <span className="text-lg font-black text-gray-900">Общественный транспорт</span>
-                </div>
-                <p className="text-xs text-gray-600">Для больших расстояний (&gt;2 км)</p>
-              </div>
-            </label>
-            
-            {formData.allow_transit && (
-              <div className="mt-6 bg-white/50 p-4 rounded-xl animate-fadeIn">
-                <div className="flex items-start gap-3">
-                  <div className="text-2xl">🚍</div>
-                  <div className="text-sm text-gray-700">
-                    <p className="font-semibold mb-2">Что мы сделаем:</p>
-                    <ul className="space-y-1">
-                      <li>• Найдём ближайшие остановки</li>
-                      <li>• Предложим маршруты автобусов/трамваев</li>
-                      <li>• Посчитаем экономию времени</li>
-                    </ul>
-                  </div>
                 </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Validation error */}
-        {validationError && (
-          <div className="bg-gradient-to-r from-red-50 to-rose-50 border-4 border-red-300 text-red-700 px-8 py-6 rounded-3xl animate-scaleIn shadow-2xl">
+        {/* Transit */}
+        <div className="group relative">
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all" />
+          <div className="relative backdrop-blur-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-3xl p-8 hover:border-green-400/50 transition-all">
+            <label className="flex items-center gap-4 cursor-pointer group/label">
+              <input
+                type="checkbox"
+                checked={formData.allow_transit}
+                onChange={(e) => setFormData({ ...formData, allow_transit: e.target.checked })}
+                className="w-8 h-8 rounded-xl text-green-600 focus:ring-green-500 transition-all cursor-pointer"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <Bus className="w-7 h-7 text-green-400" />
+                  <span className="text-2xl font-black text-white">Транспорт</span>
+                </div>
+                <p className="text-sm text-green-200/70">Для дальних переходов</p>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Validation error */}
+      {validationError && (
+        <div className="relative group animate-shake">
+          <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-pink-600 rounded-3xl opacity-50 group-hover:opacity-70 blur-lg transition-all" />
+          <div className="relative backdrop-blur-2xl bg-gradient-to-br from-red-500/20 to-pink-500/20 border-2 border-red-400/50 rounded-3xl p-8">
             <div className="flex items-center gap-4">
-              <span className="text-5xl">⚠️</span>
+              <div className="w-16 h-16 rounded-2xl bg-red-500 flex items-center justify-center flex-shrink-0">
+                <span className="text-4xl">⚠️</span>
+              </div>
               <div>
-                <p className="font-black text-xl mb-1">Проблема с формой</p>
-                <p className="text-sm">{validationError}</p>
+                <p className="font-black text-2xl text-white mb-1">Проблема</p>
+                <p className="text-red-200">{validationError}</p>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Submit button */}
-        <button
-          type="submit"
-          disabled={mutation.isPending || formProgress < 75}
-          className="relative w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white py-6 px-8 rounded-3xl font-black text-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none animate-slideInUp overflow-hidden group"
-          style={{ animationDelay: '500ms' }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-          <div className="relative z-10 flex items-center justify-center gap-3">
-            {mutation.isPending ? (
-              <>
-                <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                <span>Создаём ваш маршрут...</span>
-              </>
-            ) : formProgress < 75 ? (
-              <>
-                <span>Заполните форму ({formProgress}%)</span>
-              </>
-            ) : (
-              <>
-                <MapPin className="w-7 h-7" />
-                <span>Построить маршрут</span>
-                <span className="text-3xl">→</span>
-              </>
-            )}
-          </div>
-        </button>
+      {/* Submit button */}
+      <button
+        type="submit"
+        disabled={mutation.isPending}
+        className="group relative w-full py-8 px-12 overflow-hidden rounded-3xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none animate-fade-in"
+        style={{ animationDelay: '400ms' }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 transition-transform group-hover:scale-110" />
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 opacity-0 group-hover:opacity-100 transition-opacity animate-gradient" />
+        <div className="relative z-10 flex items-center justify-center gap-4">
+          {mutation.isPending ? (
+            <>
+              <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="text-3xl font-black text-white">Создаём маршрут...</span>
+            </>
+          ) : (
+            <>
+              <MapPin className="w-10 h-10 text-white" />
+              <span className="text-3xl font-black text-white">Построить маршрут</span>
+              <span className="text-5xl transform group-hover:translate-x-2 transition-transform">→</span>
+            </>
+          )}
+        </div>
+      </button>
 
-        {/* Error */}
-        {mutation.isError && (
-          <div className="bg-gradient-to-r from-red-50 to-rose-50 border-4 border-red-300 text-red-700 px-8 py-6 rounded-3xl animate-scaleIn shadow-2xl">
+      {/* Error */}
+      {mutation.isError && (
+        <div className="relative group animate-fade-in">
+          <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-pink-600 rounded-3xl opacity-50 group-hover:opacity-70 blur-lg transition-all" />
+          <div className="relative backdrop-blur-2xl bg-gradient-to-br from-red-500/20 to-pink-500/20 border-2 border-red-400/50 rounded-3xl p-8">
             <div className="flex items-center gap-4">
-              <span className="text-5xl">❌</span>
+              <div className="w-16 h-16 rounded-2xl bg-red-500 flex items-center justify-center flex-shrink-0">
+                <span className="text-4xl">❌</span>
+              </div>
               <div>
-                <p className="font-black text-xl mb-1">Ошибка при создании маршрута</p>
-                <p className="text-sm">
-                  {(mutation.error as any)?.response?.data?.detail || 'Проверьте введённые данные и попробуйте ещё раз.'}
+                <p className="font-black text-2xl text-white mb-1">Ошибка</p>
+                <p className="text-red-200">
+                  {(mutation.error as any)?.response?.data?.detail || 'Проверьте данные и попробуйте ещё раз'}
                 </p>
               </div>
             </div>
           </div>
-        )}
-      </form>
-    </div>
+        </div>
+      )}
+    </form>
   )
 }

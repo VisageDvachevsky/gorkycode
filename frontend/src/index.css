@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== BASE STYLES ==================== */
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -9,9 +15,37 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Анимации появления */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ==================== CUSTOM SCROLLBAR ==================== */
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #3B82F6, #8B5CF6);
+  border-radius: 10px;
+  border: 2px solid rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #60A5FA, #A78BFA);
+}
+
+/* ==================== FADE IN ==================== */
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -21,32 +55,17 @@ body {
   }
 }
 
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.animate-fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+  opacity: 0;
 }
 
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
+/* ==================== FADE IN UP ==================== */
 
-@keyframes slideInUp {
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(30px);
   }
   to {
     opacity: 1;
@@ -54,10 +73,71 @@ body {
   }
 }
 
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+/* ==================== SLIDE IN LEFT ==================== */
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+/* ==================== SLIDE IN RIGHT ==================== */
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+/* ==================== SLIDE IN UP ==================== */
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-up {
+  animation: slideInUp 0.8s ease-out forwards;
+  opacity: 0;
+}
+
+/* ==================== SCALE IN ==================== */
+
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.9);
   }
   to {
     opacity: 1;
@@ -65,50 +145,325 @@ body {
   }
 }
 
-@keyframes dashOffset {
-  to {
-    stroke-dashoffset: -20;
+.animate-scale-in {
+  animation: scaleIn 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+/* ==================== BOUNCE SLOW ==================== */
+
+@keyframes bounceSlow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
   }
 }
 
-.animate-fadeIn {
-  animation: fadeIn 0.5s ease-out;
+.animate-bounce-slow {
+  animation: bounceSlow 3s ease-in-out infinite;
 }
 
-.animate-slideInLeft {
-  animation: slideInLeft 0.5s ease-out;
+/* ==================== FLOAT ==================== */
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-10px) translateX(5px);
+  }
+  50% {
+    transform: translateY(-5px) translateX(-5px);
+  }
+  75% {
+    transform: translateY(-15px) translateX(3px);
+  }
 }
 
-.animate-slideInRight {
-  animation: slideInRight 0.5s ease-out;
+.animate-float {
+  animation: float 20s ease-in-out infinite;
 }
 
-.animate-slideInUp {
-  animation: slideInUp 0.5s ease-out;
+.animate-float-delayed {
+  animation: float 25s ease-in-out infinite;
+  animation-delay: 5s;
 }
 
-.animate-scaleIn {
-  animation: scaleIn 0.3s ease-out;
+/* ==================== FLOAT VARIATIONS ==================== */
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
 }
 
-.animate-dashOffset {
-  animation: dashOffset 30s linear infinite;
+@keyframes floatMedium {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
-/* Coffee marker hover effect */
-.coffee-marker:hover {
-  transform: rotate(-45deg) scale(1.15) !important;
-  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.5) !important;
+@keyframes floatFast {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
-/* Стили для маршрута на карте */
-.route-line {
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.animate-float-slow {
+  animation: floatSlow 4s ease-in-out infinite;
 }
 
-/* Стили для печати */
+.animate-float-medium {
+  animation: floatMedium 3s ease-in-out infinite;
+}
+
+.animate-float-fast {
+  animation: floatFast 2s ease-in-out infinite;
+}
+
+/* ==================== PULSE VARIATIONS ==================== */
+
+@keyframes pulseSlow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulseSlower {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 3s ease-in-out infinite;
+}
+
+.animate-pulse-slower {
+  animation: pulseSlower 5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* ==================== GRADIENT ANIMATIONS ==================== */
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gradientReverse {
+  0% {
+    background-position: 100% 50%;
+  }
+  50% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+.animate-gradient-reverse {
+  background-size: 200% 200%;
+  animation: gradientReverse 3s ease infinite;
+}
+
+/* ==================== TWINKLE (for stars) ==================== */
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+}
+
+.animate-twinkle {
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+/* ==================== SCROLL INDICATOR ==================== */
+
+@keyframes scroll {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 1.5s ease-in-out infinite;
+}
+
+/* ==================== SPIN REVERSE ==================== */
+
+@keyframes spinReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-reverse {
+  animation: spinReverse 1s linear infinite;
+}
+
+/* ==================== SHAKE (for errors) ==================== */
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* ==================== GLOW PULSE ==================== */
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.8);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* ==================== SHINE (for buttons) ==================== */
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+}
+
+.animate-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 70%
+  );
+  animation: shine 3s ease-in-out infinite;
+}
+
+/* ==================== LEAFLET CUSTOMIZATION ==================== */
+
+.leaflet-popup-content-wrapper {
+  border-radius: 16px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(10px);
+  background: rgba(30, 41, 59, 0.95) !important;
+  border: 2px solid rgba(59, 130, 246, 0.3) !important;
+}
+
+.leaflet-popup-content {
+  color: white !important;
+  margin: 12px !important;
+}
+
+.leaflet-popup-tip {
+  background: rgba(30, 41, 59, 0.95) !important;
+  border: 2px solid rgba(59, 130, 246, 0.3) !important;
+  border-top: none !important;
+  border-right: none !important;
+}
+
+.leaflet-marker-icon {
+  transition: all 0.3s ease;
+}
+
+.leaflet-marker-icon:hover {
+  z-index: 1000 !important;
+  transform: scale(1.2);
+  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.6));
+}
+
+/* ==================== PRINT STYLES ==================== */
+
 @media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  
   .print\:shadow-none {
     box-shadow: none !important;
   }
@@ -117,57 +472,148 @@ body {
     break-inside: avoid;
   }
   
-  .print\:hidden {
-    display: none !important;
-  }
-  
-  /* Hide map controls when printing */
   .leaflet-control-container {
     display: none !important;
   }
+  
+  body {
+    background: white !important;
+  }
+  
+  * {
+    color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
 
-/* Улучшенная прокрутка */
-html {
-  scroll-behavior: smooth;
+/* ==================== UTILITY CLASSES ==================== */
+
+.backdrop-blur-glass {
+  backdrop-filter: blur(20px) saturate(180%);
 }
 
-/* Кастомный скроллбар */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+.text-shadow-glow {
+  text-shadow: 0 0 20px currentColor;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
+.border-glow {
+  box-shadow: 0 0 20px currentColor;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #3B82F6;
-  border-radius: 10px;
-}
+/* ==================== INTERACTIVE HOVER EFFECTS ==================== */
 
-::-webkit-scrollbar-thumb:hover {
-  background: #2563EB;
-}
-
-/* Leaflet popup customization */
-.leaflet-popup-content-wrapper {
-  border-radius: 12px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-}
-
-.leaflet-popup-tip {
-  display: none;
-}
-
-/* Smooth transitions for markers */
-.leaflet-marker-icon {
+.hover-lift {
   transition: all 0.3s ease;
 }
 
-.leaflet-marker-icon:hover {
-  z-index: 1000 !important;
-  transform: scale(1.1);
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.hover-scale {
+  transition: transform 0.3s ease;
+}
+
+.hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* ==================== GRADIENT BORDERS ==================== */
+
+.gradient-border {
+  position: relative;
+  background-clip: padding-box;
+}
+
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #3B82F6, #8B5CF6, #EC4899);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+/* ==================== SELECTION STYLING ==================== */
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+::-moz-selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+/* ==================== FOCUS VISIBLE ==================== */
+
+*:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 2px;
+}
+
+/* ==================== DISABLED STATES ==================== */
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none !important;
+}
+
+/* ==================== MOBILE OPTIMIZATIONS ==================== */
+
+@media (max-width: 768px) {
+  /* Reduce animation intensity on mobile for performance */
+  .animate-float,
+  .animate-float-delayed,
+  .animate-float-slow,
+  .animate-float-medium,
+  .animate-float-fast {
+    animation-duration: 0s;
+  }
+  
+  /* Simplify gradients on mobile */
+  .animate-gradient,
+  .animate-gradient-reverse {
+    animation: none;
+  }
+  
+  /* Reduce blur effects on mobile */
+  .backdrop-blur-2xl {
+    backdrop-filter: blur(10px);
+  }
+}
+
+/* ==================== REDUCED MOTION ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==================== HIGH CONTRAST ==================== */
+
+@media (prefers-contrast: high) {
+  .backdrop-blur-2xl,
+  .backdrop-blur-xl {
+    backdrop-filter: none;
+    background: rgba(15, 23, 42, 0.95) !important;
+  }
+  
+  .border-white\/10,
+  .border-white\/20 {
+    border-color: rgba(255, 255, 255, 0.5) !important;
+  }
 }

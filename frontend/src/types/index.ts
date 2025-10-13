@@ -19,7 +19,6 @@ export interface RouteRequest {
   coffee_preferences?: CoffeePreferences
   intensity: 'relaxed' | 'medium' | 'intense'
   allow_transit?: boolean
-  // NEW TIME FIELDS
   start_time?: string  // HH:MM format
   client_timezone?: string  // IANA timezone
 }
@@ -49,7 +48,6 @@ export interface RouteResponse {
   notes: string[]
   atmospheric_description?: string
   route_geometry?: number[][]
-  // NEW FIELDS
   start_time_used?: string
   time_warnings?: string[]
 }
