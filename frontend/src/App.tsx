@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import RouteForm from './components/RouteForm'
 import RouteDisplay from './components/RouteDisplay'
@@ -10,15 +10,6 @@ const queryClient = new QueryClient()
 function App() {
   const [route, setRoute] = useState<RouteResponse | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
-  }, [])
 
   const handleStartJourney = () => {
     setShowForm(true)
@@ -44,33 +35,19 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-950 overflow-hidden">
-        {/* Animated background gradient orbs */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div 
-            className="absolute w-[600px] h-[600px] rounded-full bg-blue-500/20 blur-3xl animate-float"
-            style={{
-              left: `${mousePosition.x / 20}px`,
-              top: `${mousePosition.y / 20}px`,
-              transition: 'all 0.5s ease-out'
-            }}
-          />
-          <div 
-            className="absolute w-[800px] h-[800px] rounded-full bg-purple-500/15 blur-3xl animate-float-delayed"
-            style={{
-              right: `${mousePosition.x / 30}px`,
-              bottom: `${mousePosition.y / 30}px`,
-              transition: 'all 0.7s ease-out'
-            }}
-          />
-          <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-cyan-500/10 blur-3xl animate-pulse-slow" />
-          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full bg-pink-500/10 blur-3xl animate-pulse-slower" />
+        {/* Static background decorative elements */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-30">
+          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-blue-500/30 blur-3xl animate-float-slow" />
+          <div className="absolute bottom-0 right-1/4 w-[800px] h-[800px] rounded-full bg-purple-500/20 blur-3xl animate-float-delayed" />
+          <div className="absolute top-1/3 right-1/3 w-[500px] h-[500px] rounded-full bg-cyan-500/20 blur-3xl animate-pulse-slow" />
+          <div className="absolute bottom-1/3 left-1/3 w-[400px] h-[400px] rounded-full bg-pink-500/15 blur-3xl animate-pulse-slower" />
         </div>
 
         {/* Starfield effect */}
         <div className="fixed inset-0 pointer-events-none">
-          {[...Array(50)].map((_, i) => (
+          {Array.from({ length: 50 }).map((_, i) => (
             <div
-              key={i}
+              key={`star-${i}`}
               className="absolute w-1 h-1 bg-white rounded-full animate-twinkle"
               style={{
                 left: `${Math.random() * 100}%`,
@@ -122,38 +99,29 @@ function App() {
           {!showForm && !route && (
             <Hero onStartJourney={handleStartJourney} />
           )}
-
-          {showForm && (
-            <div id="route-form" className="min-h-screen pt-12 pb-24">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {showForm && !route && (
+            <div id="route-form" className="py-20 px-4 sm:px-6 lg:px-8">
+              <div className="max-w-4xl mx-auto">
                 <RouteForm onRouteGenerated={handleRouteGenerated} />
               </div>
             </div>
           )}
-
+          
           {route && (
-            <div id="route-display" className="min-h-screen pt-12 pb-24">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <RouteDisplay route={route} onNewRoute={handleNewRoute} />
+            <div id="route-display" className="py-20 px-4 sm:px-6 lg:px-8">
+              <div className="max-w-6xl mx-auto">
+                <RouteDisplay route={route} />
               </div>
             </div>
           )}
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 mt-24 border-t border-white/10 backdrop-blur-xl bg-white/5">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="text-center">
-              <p className="text-blue-300/70 mb-4">
-                Создано с ❤️ для любителей прогулок
-              </p>
-              <div className="flex items-center justify-center gap-6 text-sm text-blue-400/50">
-                <span>Powered by AI</span>
-                <span>•</span>
-                <span>2GIS API</span>
-                <span>•</span>
-                <span>v0.2.0</span>
-              </div>
+        <footer className="relative z-10 backdrop-blur-xl bg-white/5 border-t border-white/10 mt-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="text-center text-blue-300/50">
+              <p>© 2025 AI-Tourist. Powered by AI & ❤️</p>
             </div>
           </div>
         </footer>

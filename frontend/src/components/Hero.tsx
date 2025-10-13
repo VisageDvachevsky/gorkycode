@@ -5,14 +5,6 @@ interface HeroProps {
 export default function Hero({ onStartJourney }: HeroProps) {
   return (
     <div className="relative min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      {/* Floating elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-400 rounded-full animate-float-slow" />
-        <div className="absolute top-1/3 right-1/3 w-3 h-3 bg-purple-400 rounded-full animate-float-medium" />
-        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-cyan-400 rounded-full animate-float-fast" />
-        <div className="absolute top-2/3 right-1/4 w-4 h-4 bg-pink-400 rounded-full animate-float-slow" />
-      </div>
-
       <div className="relative max-w-5xl mx-auto text-center">
         {/* Main heading */}
         <div className="mb-8 animate-fade-in">
@@ -30,35 +22,35 @@ export default function Hero({ onStartJourney }: HeroProps) {
               Прогулка
             </span>
             <br />
-            <span className="inline-block bg-gradient-to-r from-purple-400 via-pink-400 to-red-400 bg-clip-text text-transparent animate-gradient-reverse pb-2">
-              мечты
+            <span className="inline-block bg-gradient-to-r from-purple-400 via-pink-400 to-red-400 bg-clip-text text-transparent animate-gradient pb-2">
+              твоей мечты
             </span>
           </h1>
           
-          <p className="text-xl sm:text-2xl md:text-3xl text-blue-300/90 font-light max-w-3xl mx-auto leading-relaxed animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            Искусственный интеллект создаст <span className="text-cyan-400 font-semibold">персональный маршрут</span> по Нижнему Новгороду специально для вас
+          <p className="text-2xl sm:text-3xl text-blue-200/80 max-w-3xl mx-auto leading-relaxed">
+            AI создаст персональный маршрут по Нижнему Новгороду специально для тебя
           </p>
         </div>
 
-        {/* Features grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+        {/* Feature highlights */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
           {[
-            { emoji: '🎯', title: 'Персонально', desc: 'Учитываем ваши интересы' },
-            { emoji: '☕', title: 'Умные перерывы', desc: 'Кафе в нужный момент' },
-            { emoji: '🚶', title: 'Реальные пути', desc: 'Настоящие улицы' },
-            { emoji: '✨', title: 'AI-подсказки', desc: 'Живые объяснения' }
-          ].map((feature, i) => (
+            { icon: '🎯', title: 'Персонально', desc: 'Под твои интересы' },
+            { icon: '⚡', title: 'Быстро', desc: 'За 30 секунд' },
+            { icon: '☕', title: 'С кофе', desc: 'Кафе по пути' },
+            { icon: '🤖', title: 'С AI', desc: 'Умные объяснения' }
+          ].map((feature, index) => (
             <div
-              key={i}
-              className="group relative p-6 rounded-3xl backdrop-blur-xl bg-white/5 border border-white/10 hover:border-white/30 transition-all hover:scale-105 hover:-translate-y-2 cursor-default"
-              style={{ animationDelay: `${0.5 + i * 0.1}s` }}
+              key={feature.title}
+              className="group relative animate-fade-in-up"
+              style={{ animationDelay: `${0.4 + index * 0.1}s` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="relative">
+              <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl opacity-20 group-hover:opacity-40 blur transition-all" />
+              <div className="relative backdrop-blur-2xl bg-white/10 border border-white/20 rounded-2xl p-6 hover:border-white/40 transition-all">
                 <div className="text-5xl mb-3 transform group-hover:scale-110 transition-transform">
-                  {feature.emoji}
+                  {feature.icon}
                 </div>
-                <h3 className="text-lg font-bold text-white mb-1">
+                <h3 className="text-xl font-black text-white mb-1">
                   {feature.title}
                 </h3>
                 <p className="text-sm text-blue-300/70">

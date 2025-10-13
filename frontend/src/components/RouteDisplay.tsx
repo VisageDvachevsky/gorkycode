@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { Share2, Printer, Clock, MapPin, Coffee, Calendar } from 'lucide-react'
+import { Share2, Printer, Clock, MapPin, Coffee } from 'lucide-react'
 import type { RouteResponse } from '../types'
 
-// Fix Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -44,10 +43,9 @@ const coffeeIcon = L.divIcon({
 
 interface Props {
   route: RouteResponse
-  onNewRoute: () => void
 }
 
-export default function RouteDisplay({ route, onNewRoute }: Props) {
+export default function RouteDisplay({ route }: Props) {
   const [activePoiId, setActivePoiId] = useState<number | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
 
@@ -90,6 +88,37 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
     }
   }
 
+  const stats = [
+    {
+      id: 'duration',
+      icon: Clock,
+      label: 'Длительность',
+      value: `${hours > 0 ? `${hours}ч ` : ''}${minutes}м`,
+      color: 'from-blue-500 to-cyan-500'
+    },
+    {
+      id: 'points',
+      icon: MapPin,
+      label: 'Точек',
+      value: route.route.length,
+      color: 'from-green-500 to-emerald-500'
+    },
+    {
+      id: 'distance',
+      icon: '🚶',
+      label: 'Расстояние',
+      value: `${route.total_distance_km.toFixed(1)} км`,
+      color: 'from-purple-500 to-pink-500'
+    },
+    {
+      id: 'coffee',
+      icon: Coffee,
+      label: 'Кофе-брейков',
+      value: coffeeBreaksCount,
+      color: 'from-amber-500 to-orange-500'
+    }
+  ]
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -105,7 +134,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
         <h2 className="text-5xl sm:text-6xl md:text-7xl font-black bg-gradient-to-r from-green-400 via-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-4 animate-gradient">
           Ваш маршрут готов!
         </h2>
-        <p className="text-xl text-blue-300/70">Персональная прогулка по Нижнему Новгороду</p>
+        <p className="text-xl text-blue-300/80">Персональная прогулка по Нижнему Новгороду</p>
       </div>
 
       {/* Action buttons */}
@@ -134,13 +163,12 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-        {[
-          { icon: Clock, label: 'Длительность', value: `${hours > 0 ? `${hours}ч ` : ''}${minutes}м`, color: 'from-blue-500 to-cyan-500' },
-          { icon: MapPin, label: 'Точек', value: route.route.length, color: 'from-green-500 to-emerald-500' },
-          { icon: '🚶', label: 'Расстояние', value: `${route.total_distance_km.toFixed(1)} км`, color: 'from-purple-500 to-pink-500' },
-          { icon: Coffee, label: 'Кофе-брейков', value: coffeeBreaksCount, color: 'from-amber-500 to-orange-500' },
-        ].map((stat, i) => (
-          <div key={i} className="group relative animate-fade-in" style={{ animationDelay: `${300 + i * 50}ms` }}>
+        {stats.map((stat, index) => (
+          <div
+            key={stat.id}
+            className="group relative animate-fade-in"
+            style={{ animationDelay: `${300 + index * 50}ms` }}
+          >
             <div className={`absolute -inset-0.5 bg-gradient-to-r ${stat.color} rounded-3xl opacity-20 group-hover:opacity-40 blur transition-all`} />
             <div className="relative backdrop-blur-2xl bg-white/10 border border-white/20 rounded-3xl p-6 hover:border-white/40 transition-all">
               <div className="flex items-center gap-3 mb-3">
@@ -201,134 +229,156 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
               <Marker 
                 key={poi.poi_id}
                 position={[poi.lat, poi.lon]}
-                icon={poi.is_coffee_break ? coffeeIcon : L.icon({
-                  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-                  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-                  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-                  iconSize: [25, 41],
-                  iconAnchor: [12, 41],
-                })}
-                eventHandlers={{
-                  click: () => scrollToPoi(poi.poi_id)
-                }}
+                icon={poi.is_coffee_break ? coffeeIcon : new L.Icon.Default()}
               >
                 <Popup>
-                  <div className="p-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-gradient-to-r from-blue-600 to-purple-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold">
-                        {poi.order}
-                      </span>
-                      <strong>{poi.name}</strong>
-                      {poi.is_coffee_break && <span>☕</span>}
-                    </div>
-                    <p className="text-sm">{poi.why}</p>
+                  <div className="text-center">
+                    <h3 className="font-bold text-lg mb-1">{poi.name}</h3>
+                    {poi.category && <p className="text-sm text-gray-600 mb-2">{poi.category}</p>}
+                    {poi.is_coffee_break && (
+                      <div className="text-orange-600 font-bold text-sm">☕ Кофе-брейк</div>
+                    )}
+                    <button
+                      onClick={() => scrollToPoi(poi.poi_id)}
+                      className="mt-2 px-4 py-1 bg-blue-500 text-white rounded-full text-sm hover:bg-blue-600 transition-colors"
+                    >
+                      Подробнее
+                    </button>
                   </div>
                 </Popup>
               </Marker>
             ))}
             
-            <Polyline 
-              positions={routeGeometry} 
-              color="#3B82F6" 
-              weight={6}
-              opacity={0.8}
-              dashArray="15, 10"
-            />
+            {routeGeometry.length > 0 && (
+              <Polyline 
+                positions={routeGeometry} 
+                color="#3B82F6" 
+                weight={4}
+                opacity={0.7}
+              />
+            )}
           </MapContainer>
         </div>
       </div>
 
-      {/* Timeline */}
-      <div className="space-y-6">
-        <h3 className="text-4xl font-black text-center bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-8 animate-fade-in">
-          Детальный план
+      {/* Route points */}
+      <div className="space-y-6 animate-fade-in" style={{ animationDelay: '700ms' }}>
+        <h3 className="text-4xl font-black text-white mb-8 flex items-center gap-4">
+          <span className="text-5xl">📍</span>
+          Точки маршрута
         </h3>
-        
+
         {route.route.map((poi, index) => (
-          <div
-            key={poi.poi_id}
-            id={`poi-${poi.poi_id}`}
-            className={`group relative animate-slide-in-up ${
-              activePoiId === poi.poi_id ? 'scale-105' : ''
-            }`}
-            style={{ animationDelay: `${700 + index * 100}ms` }}
-          >
-            <div className={`absolute -inset-1 rounded-3xl opacity-30 group-hover:opacity-50 blur-xl transition-all ${
-              poi.is_coffee_break 
-                ? 'bg-gradient-to-r from-amber-600 to-orange-600' 
-                : 'bg-gradient-to-r from-blue-600 to-purple-600'
-            }`} />
-            
-            <div className={`relative backdrop-blur-2xl border-2 rounded-3xl p-8 transition-all ${
-              poi.is_coffee_break
-                ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-400/30 hover:border-amber-400/50'
-                : 'bg-white/10 border-white/20 hover:border-white/40'
-            }`}>
-              <div className="flex items-start gap-6">
-                {/* Number badge */}
-                <div className="flex-shrink-0">
-                  <div className={`w-20 h-20 rounded-3xl flex items-center justify-center text-white font-black text-3xl shadow-2xl transform group-hover:scale-110 transition-transform ${
-                    poi.is_coffee_break 
-                      ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
-                      : 'bg-gradient-to-br from-blue-600 to-purple-600'
-                  }`}>
-                    {poi.is_coffee_break ? '☕' : poi.order}
+          <div key={poi.poi_id}>
+            <div
+              id={`poi-${poi.poi_id}`}
+              className={`group relative transition-all ${
+                activePoiId === poi.poi_id ? 'scale-105' : ''
+              }`}
+            >
+              <div className={`absolute -inset-1 bg-gradient-to-r ${
+                poi.is_coffee_break
+                  ? 'from-amber-600 to-orange-600'
+                  : 'from-blue-600 via-purple-600 to-pink-600'
+              } rounded-3xl opacity-20 group-hover:opacity-40 blur-xl transition-all`} />
+              
+              <div className={`relative backdrop-blur-2xl border-2 rounded-3xl p-8 hover:border-white/40 transition-all ${
+                poi.is_coffee_break
+                  ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 border-amber-400/30'
+                  : 'bg-white/10 border-white/20'
+              }`}>
+                {/* Header */}
+                <div className="flex items-start gap-6 mb-6">
+                  <div className="relative flex-shrink-0">
+                    <div className={`absolute inset-0 bg-gradient-to-r ${
+                      poi.is_coffee_break
+                        ? 'from-amber-500 to-orange-500'
+                        : 'from-blue-500 to-purple-500'
+                    } rounded-2xl blur-lg opacity-50`} />
+                    <div className={`relative w-20 h-20 rounded-2xl bg-gradient-to-br ${
+                      poi.is_coffee_break
+                        ? 'from-amber-500 to-orange-500'
+                        : 'from-blue-500 to-purple-500'
+                    } flex items-center justify-center text-4xl font-black text-white shadow-2xl`}>
+                      {poi.is_coffee_break ? '☕' : index + 1}
+                    </div>
                   </div>
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  {/* Title */}
-                  <div className="flex items-center gap-3 mb-4 flex-wrap">
-                    <h4 className="font-black text-3xl text-white">{poi.name}</h4>
-                    {poi.is_coffee_break && (
-                      <span className="px-4 py-2 bg-amber-100 text-amber-900 text-sm font-bold rounded-full">
-                        Кофе-брейк
-                      </span>
+
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div>
+                        <h4 className="text-3xl font-black text-white mb-2">{poi.name}</h4>
+                        {poi.category && (
+                          <span className={`inline-block px-4 py-2 rounded-full text-sm font-bold ${
+                            poi.is_coffee_break
+                              ? 'bg-amber-500/30 text-amber-200'
+                              : 'bg-blue-500/30 text-blue-200'
+                          }`}>
+                            {poi.category}
+                          </span>
+                        )}
+                      </div>
+                      {poi.rating && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-full">
+                          <span className="text-2xl">⭐</span>
+                          <span className="text-lg font-bold text-yellow-200">{poi.rating.toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {poi.est_arrival && (
+                      <div className="flex items-center gap-3 text-blue-300">
+                        <Clock className="w-5 h-5" />
+                        <span className="font-semibold">{formatTime(poi.est_arrival)}</span>
+                        {poi.est_duration_minutes && (
+                          <span className="text-blue-300/70">• {poi.est_duration_minutes} мин</span>
+                        )}
+                      </div>
                     )}
                   </div>
-                  
-                  {/* Description */}
-                  <p className="text-lg text-blue-100 mb-6 leading-relaxed">{poi.why}</p>
-                  
-                  {/* Tip */}
-                  {poi.tip && (
-                    <div className={`mb-6 p-6 rounded-2xl border-2 ${
-                      poi.is_coffee_break
-                        ? 'bg-amber-900/20 border-amber-500/30'
-                        : 'bg-blue-900/20 border-blue-500/30'
-                    }`}>
-                      <div className="flex items-start gap-3">
-                        <span className="text-3xl">💡</span>
-                        <p className="text-white">{poi.tip}</p>
+                </div>
+
+                {/* Description */}
+                {poi.description && (
+                  <div className="mb-6 p-6 bg-slate-900/50 rounded-2xl border border-white/10">
+                    <p className="text-lg text-blue-100 leading-relaxed">{poi.description}</p>
+                  </div>
+                )}
+
+                {/* AI Explanation */}
+                {poi.ai_why && (
+                  <div className="mb-6 p-6 bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-400/30">
+                    <div className="flex items-start gap-3 mb-3">
+                      <span className="text-3xl">🤖</span>
+                      <h5 className="text-xl font-bold text-purple-200">Почему это место для вас:</h5>
+                    </div>
+                    <p className="text-lg text-purple-100 leading-relaxed pl-12">{poi.ai_why}</p>
+                  </div>
+                )}
+
+                {/* AI Tip */}
+                {poi.ai_tip && (
+                  <div className="p-6 bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl border border-cyan-400/30">
+                    <div className="flex items-start gap-3">
+                      <span className="text-3xl">💡</span>
+                      <div>
+                        <h5 className="text-xl font-bold text-cyan-200 mb-2">Совет:</h5>
+                        <p className="text-lg text-cyan-100 leading-relaxed">{poi.ai_tip}</p>
                       </div>
                     </div>
-                  )}
-                  
-                  {/* Time info */}
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-3 px-6 py-3 bg-white/5 rounded-2xl border border-white/10">
-                      <Clock className="w-5 h-5 text-blue-400" />
-                      <span className="font-bold text-white">
-                        {formatTime(poi.arrival_time)} - {formatTime(poi.leave_time)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 px-6 py-3 bg-white/5 rounded-2xl border border-white/10">
-                      <Calendar className="w-5 h-5 text-purple-400" />
-                      <span className="font-bold text-white">{poi.est_visit_minutes} минут</span>
-                    </div>
                   </div>
-                </div>
+                )}
               </div>
-              
-              {/* Connection line */}
-              {index < route.route.length - 1 && (
-                <div className="mt-8 pt-8 border-t-2 border-dashed border-white/20 flex items-center gap-4 text-blue-300/70">
-                  <span className="text-3xl">👣</span>
-                  <span className="font-medium">Переход к следующей точке</span>
-                  <div className="flex-1 h-px bg-gradient-to-r from-blue-400/50 to-transparent" />
-                </div>
-              )}
             </div>
+
+            {/* Transit info */}
+            {index < route.route.length - 1 && (
+              <div className="flex items-center gap-4 my-6 px-8 animate-fade-in">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-blue-400/50 to-transparent" />
+                <span className="font-medium text-blue-300">Переход к следующей точке</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-blue-400/50 to-transparent" />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -344,7 +394,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
             </h4>
             <ul className="space-y-4">
               {route.notes.map((note, i) => (
-                <li key={i} className="flex items-start gap-4">
+                <li key={`note-${i}-${note.substring(0, 20)}`} className="flex items-start gap-4">
                   <span className="text-yellow-400 text-2xl mt-1">•</span>
                   <span className="text-lg text-yellow-100 leading-relaxed">{note}</span>
                 </li>
@@ -372,7 +422,7 @@ export default function RouteDisplay({ route, onNewRoute }: Props) {
                 type="text"
                 value={window.location.href}
                 readOnly
-                className="w-full px-6 py-4 bg-white/5 border-2 border-white/10 rounded-2xl text-white font-mono text-sm mb-6"
+                className="w-full px-6 py-4 bg-slate-900/50 border-2 border-blue-500/30 rounded-2xl text-white font-mono text-sm mb-6 focus:ring-4 focus:ring-blue-500/30 focus:border-blue-500/50 transition-all"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
               <button
