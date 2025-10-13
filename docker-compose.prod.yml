@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+  nginx:
+    volumes:
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 256M
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+
+  gateway-1:
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=WARNING
+      - WORKERS=4
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  gateway-2:
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=WARNING
+      - WORKERS=4
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  ml-service:
+    environment:
+      - WORKERS=8
+      - BATCH_SIZE=32
+    volumes:
+      - ml_models_prod:/models:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
+      restart_policy:
+        condition: any
+        max_attempts: 3
+    command:
+      - "python"
+      - "-OO"
+      - "-m"
+      - "app.server"
+
+  llm-service:
+    environment:
+      - LOG_LEVEL=WARNING
+      - MAX_RETRIES=5
+    deploy:
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  celery-worker-1:
+    environment:
+      - CELERY_CONCURRENCY=4
+      - CELERY_MAX_TASKS_PER_CHILD=100
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  celery-worker-2:
+    environment:
+      - CELERY_CONCURRENCY=4
+      - CELERY_MAX_TASKS_PER_CHILD=100
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  routing-service:
+    environment:
+      - OPTIMIZATION_ALGORITHM=genetic
+      - MAX_ITERATIONS=1000
+    deploy:
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  geocoding-service:
+    environment:
+      - CACHE_SIZE=10000
+      - REQUEST_TIMEOUT=5
+    deploy:
+      restart_policy:
+        condition: any
+        max_attempts: 3
+
+  postgres:
+    environment:
+      - POSTGRES_SHARED_BUFFERS=512MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=2GB
+      - POSTGRES_WORK_MEM=32MB
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+        reservations:
+          cpus: '2.0'
+          memory: 2G
+      restart_policy:
+        condition: any
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=500"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "effective_cache_size=2GB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+
+  redis-master:
+    environment:
+      - REDIS_MAXMEMORY=1G
+      - REDIS_MAXMEMORY_POLICY=allkeys-lru
+    volumes:
+      - redis_data_prod:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1.5G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+      restart_policy:
+        condition: any
+
+  prometheus:
+    volumes:
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+
+  grafana:
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=redis-datasource,postgres-datasource
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  ml_models_prod:
+  prometheus_data:
+  grafana_data:

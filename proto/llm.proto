@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package llm;
+
+service LLMService {
+  rpc GenerateRouteExplanation(RouteExplanationRequest) returns (RouteExplanationResponse);
+  rpc GenerateRouteExplanationAsync(RouteExplanationRequest) returns (TaskResponse);
+  rpc GetTaskStatus(TaskStatusRequest) returns (TaskStatusResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message RouteExplanationRequest {
+  repeated POI pois = 1;
+  string user_interests = 2;
+  string social_mode = 3;
+  string intensity = 4;
+}
+
+message POI {
+  int32 id = 1;
+  string name = 2;
+  string category = 3;
+  repeated string tags = 4;
+  string description = 5;
+  string local_tip = 6;
+  float rating = 7;
+}
+
+message RouteExplanationResponse {
+  string summary = 1;
+  repeated Explanation explanations = 2;
+  repeated string notes = 3;
+  string atmospheric_description = 4;
+  float latency_ms = 5;
+}
+
+message Explanation {
+  int32 poi_id = 1;
+  string why = 2;
+  string tip = 3;
+}
+
+message TaskResponse {
+  string task_id = 1;
+  string status = 2;
+}
+
+message TaskStatusRequest {
+  string task_id = 1;
+}
+
+message TaskStatusResponse {
+  string status = 1;
+  RouteExplanationResponse result = 2;
+  string error = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string provider = 2;
+  string model = 3;
+  int32 active_tasks = 4;
+}

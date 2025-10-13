@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "geocoding-service"
+version = "1.0.0"
+description = "2GIS geocoding service"
+authors = []
+
+[tool.poetry.dependencies]
+python = "^3.11"
+grpcio = "^1.60.0"
+grpcio-tools = "^1.60.0"
+protobuf = "^4.25.0"
+httpx = "^0.26.0"
+redis = "^5.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

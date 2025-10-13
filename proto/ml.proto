@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package ml;
+
+service EmbeddingService {
+  rpc GenerateEmbedding(EmbeddingRequest) returns (EmbeddingResponse);
+  rpc GenerateEmbeddingBatch(EmbeddingBatchRequest) returns (EmbeddingBatchResponse);
+  rpc CosineSimilarity(SimilarityRequest) returns (SimilarityResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message EmbeddingRequest {
+  string text = 1;
+  bool use_cache = 2;
+}
+
+message EmbeddingResponse {
+  repeated float embedding = 1;
+  bool from_cache = 2;
+  int32 dimension = 3;
+  float latency_ms = 4;
+}
+
+message EmbeddingBatchRequest {
+  repeated string texts = 1;
+  bool use_cache = 2;
+}
+
+message EmbeddingBatchResponse {
+  repeated EmbeddingResult results = 1;
+  float total_latency_ms = 2;
+}
+
+message EmbeddingResult {
+  repeated float embedding = 1;
+  bool from_cache = 2;
+}
+
+message SimilarityRequest {
+  repeated float vector1 = 1;
+  repeated float vector2 = 2;
+}
+
+message SimilarityResponse {
+  float similarity = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string model_name = 2;
+  int32 model_dimension = 3;
+  int64 cache_size = 4;
+}

@@ -1,98 +1,191 @@
-DOCKER_COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+.PHONY: help proto build up down logs scale health test clean migrate backup restore
 
-export DOCKER_BUILDKIT=1
-export COMPOSE_DOCKER_CLI_BUILD=1
-
-.PHONY: help up down build rebuild logs clean load-data init-db reset-db shell-backend shell-frontend shell-db restart-backend restart-frontend
+COMPOSE := docker compose
+COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
+PROTO_DIR := proto
+SERVICES := gateway ml llm routing geocoding
 
 help:
-	@echo "AI-Tourist Development Commands:"
+	@echo "🚀 AI-Tourist Microservices Management"
 	@echo ""
-	@echo "  make up              - Start all services"
-	@echo "  make down            - Stop all services"
-	@echo "  make build           - Build all containers"
-	@echo "  make rebuild         - Rebuild and restart"
-	@echo "  make logs            - Show logs (all services)"
-	@echo "  make logs-api        - Show backend logs"
-	@echo "  make logs-frontend   - Show frontend logs"
-	@echo "  make clean           - Remove volumes and containers"
-	@echo "  make load-data       - Load POI data into database"
-	@echo "  make init-db         - Initialize database and load POI data"
-	@echo "  make reset-db        - Reset database and reload POI data"
+	@echo "Development:"
+	@echo "  make proto          Generate protobuf code for all services"
+	@echo "  make build          Build all service images"
+	@echo "  make up             Start all services (development)"
+	@echo "  make down           Stop all services"
+	@echo "  make restart        Restart all services"
+	@echo "  make logs           Show logs (all services)"
+	@echo "  make logs-<service> Show logs for specific service"
+	@echo ""
+	@echo "Production:"
+	@echo "  make prod-up        Start in production mode"
+	@echo "  make prod-down      Stop production deployment"
+	@echo "  make prod-deploy    Full production deployment"
+	@echo ""
+	@echo "Scaling:"
+	@echo "  make scale-gateway N=4    Scale API gateway to N instances"
+	@echo "  make scale-workers N=8    Scale Celery workers to N instances"
+	@echo ""
+	@echo "Operations:"
+	@echo "  make health         Check health of all services"
+	@echo "  make test           Run integration tests"
+	@echo "  make migrate        Run database migrations"
+	@echo "  make backup         Backup PostgreSQL database"
+	@echo "  make restore FILE=  Restore database from backup"
+	@echo ""
+	@echo "Maintenance:"
+	@echo "  make clean          Remove containers, volumes, networks"
+	@echo "  make clean-cache    Clear Redis cache"
+	@echo "  make rebuild        Full rebuild and restart"
 
-up:
-	$(DOCKER_COMPOSE) up -d
-
-down:
-	$(DOCKER_COMPOSE) down
+proto:
+	@echo "📦 Generating protobuf code..."
+	@for service in $(SERVICES); do \
+		python -m grpc_tools.protoc \
+			-I$(PROTO_DIR) \
+			--python_out=services/$$service/app/proto \
+			--grpc_python_out=services/$$service/app/proto \
+			$(PROTO_DIR)/*.proto; \
+		echo "✓ Generated proto for $$service"; \
+	done
 
 build:
-	$(DOCKER_COMPOSE) build --progress=plain
+	@echo "🔨 Building service images..."
+	$(COMPOSE) build --parallel
 
-rebuild: down
-	$(DOCKER_COMPOSE) build
-	$(DOCKER_COMPOSE) up -d
-	@echo ""
-	@echo "✅ Services rebuilt and started"
-	@echo "Backend API: http://localhost:8000"
-	@echo "Frontend: http://localhost:5173"
-	@echo "Docs: http://localhost:8000/docs"
+up:
+	@echo "🚀 Starting services..."
+	$(COMPOSE) up -d
+	@echo "⏳ Waiting for services to be healthy..."
+	@sleep 5
+	@make health
+
+down:
+	@echo "🛑 Stopping services..."
+	$(COMPOSE) down
+
+restart:
+	@echo "🔄 Restarting services..."
+	$(COMPOSE) restart
 
 logs:
-	$(DOCKER_COMPOSE) logs -f
+	$(COMPOSE) logs -f --tail=100
 
-logs-api:
-	$(DOCKER_COMPOSE) logs -f backend
+logs-gateway:
+	$(COMPOSE) logs -f gateway-1 gateway-2
 
-logs-frontend:
-	$(DOCKER_COMPOSE) logs -f frontend
+logs-ml:
+	$(COMPOSE) logs -f ml-service
 
-logs-db:
-	$(DOCKER_COMPOSE) logs -f db
+logs-llm:
+	$(COMPOSE) logs -f llm-service
+
+logs-routing:
+	$(COMPOSE) logs -f routing-service
+
+logs-workers:
+	$(COMPOSE) logs -f celery-worker-1 celery-worker-2
+
+prod-up:
+	@echo "🚀 Starting production deployment..."
+	$(COMPOSE_PROD) up -d
+	@make health
+
+prod-down:
+	$(COMPOSE_PROD) down
+
+prod-deploy:
+	@echo "🚀 Full production deployment..."
+	@make proto
+	@make build
+	@$(COMPOSE_PROD) pull
+	@$(COMPOSE_PROD) up -d --remove-orphans
+	@echo "⏳ Waiting for services..."
+	@sleep 10
+	@make health
+	@echo "✅ Production deployment complete"
+
+scale-gateway:
+	@if [ -z "$(N)" ]; then echo "Usage: make scale-gateway N=4"; exit 1; fi
+	@echo "⚖️  Scaling API Gateway to $(N) instances..."
+	$(COMPOSE) up -d --scale gateway=$(N)
+
+scale-workers:
+	@if [ -z "$(N)" ]; then echo "Usage: make scale-workers N=8"; exit 1; fi
+	@echo "⚖️  Scaling Celery workers to $(N) instances..."
+	$(COMPOSE) up -d --scale celery-worker=$(N)
+
+health:
+	@echo "🏥 Checking service health..."
+	@echo "\n=== API Gateway ==="
+	@curl -sf http://localhost/health | jq . || echo "❌ Gateway unhealthy"
+	@echo "\n=== ML Service ==="
+	@docker exec aitourist-ml grpc_health_probe -addr=:50051 && echo "✅ ML Service healthy" || echo "❌ ML Service unhealthy"
+	@echo "\n=== LLM Service ==="
+	@docker exec aitourist-llm grpc_health_probe -addr=:50052 && echo "✅ LLM Service healthy" || echo "❌ LLM Service unhealthy"
+	@echo "\n=== Routing Service ==="
+	@docker exec aitourist-routing grpc_health_probe -addr=:50053 && echo "✅ Routing Service healthy" || echo "❌ Routing Service unhealthy"
+	@echo "\n=== Geocoding Service ==="
+	@docker exec aitourist-geocoding grpc_health_probe -addr=:50054 && echo "✅ Geocoding Service healthy" || echo "❌ Geocoding Service unhealthy"
+	@echo "\n=== PostgreSQL ==="
+	@docker exec aitourist-postgres pg_isready -U aitourist && echo "✅ PostgreSQL healthy" || echo "❌ PostgreSQL unhealthy"
+	@echo "\n=== Redis ==="
+	@docker exec aitourist-redis redis-cli ping && echo "✅ Redis healthy" || echo "❌ Redis unhealthy"
+
+test:
+	@echo "🧪 Running integration tests..."
+	@pytest tests/integration -v --tb=short
+
+migrate:
+	@echo "🗄️  Running database migrations..."
+	$(COMPOSE) exec gateway-1 alembic upgrade head
+
+backup:
+	@echo "💾 Creating database backup..."
+	@mkdir -p backups
+	@docker exec aitourist-postgres pg_dump -U aitourist aitourist_db | gzip > backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz
+	@echo "✅ Backup created: backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz"
+
+restore:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make restore FILE=backups/backup.sql.gz"; exit 1; fi
+	@echo "📥 Restoring database from $(FILE)..."
+	@gunzip -c $(FILE) | docker exec -i aitourist-postgres psql -U aitourist aitourist_db
+	@echo "✅ Database restored"
 
 clean:
-	$(DOCKER_COMPOSE) down -v --remove-orphans
-	docker system prune -f
-	@echo "✅ Cleaned up containers, volumes, and orphaned resources"
+	@echo "🧹 Cleaning up..."
+	$(COMPOSE) down -v --remove-orphans
+	@docker system prune -f
+	@echo "✅ Cleanup complete"
 
-load-data:
-	@echo "📊 Loading POI data into database..."
-	@if [ -f data/poi.json ]; then \
-		$(DOCKER_COMPOSE) exec backend python scripts/load_pois.py; \
-		echo ""; \
-		echo "✅ POI data loaded successfully"; \
-	else \
-		echo "❌ Error: data/poi.json not found"; \
-		exit 1; \
-	fi
+clean-cache:
+	@echo "🧹 Clearing Redis cache..."
+	@docker exec aitourist-redis redis-cli FLUSHALL
+	@echo "✅ Cache cleared"
 
-init-db: up
-	@echo "⏳ Waiting for services to be ready..."
-	@sleep 5
-	@echo "📊 Initializing database and loading POI data..."
-	@$(MAKE) load-data
+rebuild:
+	@echo "🔨 Full rebuild..."
+	@make down
+	@make build
+	@make up
+	@echo "✅ Rebuild complete"
 
-reset-db: down
-	@echo "🗑️  Resetting database..."
-	$(DOCKER_COMPOSE) up -d db redis
-	@sleep 3
-	$(DOCKER_COMPOSE) up -d backend
-	@sleep 5
-	@echo "📊 Loading POI data..."
-	@$(MAKE) load-data
-	@echo "✅ Database reset complete"
+watch:
+	@echo "👀 Watching logs (Ctrl+C to stop)..."
+	$(COMPOSE) logs -f
 
-shell-backend:
-	$(DOCKER_COMPOSE) exec backend /bin/bash
+stats:
+	@echo "📊 Service statistics..."
+	@docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
 
-shell-frontend:
-	$(DOCKER_COMPOSE) exec frontend /bin/sh
+shell-gateway:
+	$(COMPOSE) exec gateway-1 /bin/bash
+
+shell-ml:
+	$(COMPOSE) exec ml-service /bin/bash
 
 shell-db:
-	$(DOCKER_COMPOSE) exec db psql -U aitourist -d aitourist_db
+	$(COMPOSE) exec postgres psql -U aitourist aitourist_db
 
-restart-backend:
-	$(DOCKER_COMPOSE) restart backend
-
-restart-frontend:
-	$(DOCKER_COMPOSE) restart frontend
+shell-redis:
+	$(COMPOSE) exec redis-master redis-cli

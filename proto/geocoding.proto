@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package geocoding;
+
+service GeocodingService {
+  rpc Geocode(GeocodeRequest) returns (GeocodeResponse);
+  rpc ReverseGeocode(ReverseGeocodeRequest) returns (ReverseGeocodeResponse);
+  rpc SearchCafes(CafeSearchRequest) returns (CafeSearchResponse);
+  rpc GetWalkingRoute(WalkingRouteRequest) returns (WalkingRouteResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message GeocodeRequest {
+  string address = 1;
+  Location hint = 2;
+}
+
+message Location {
+  float lat = 1;
+  float lon = 2;
+}
+
+message GeocodeResponse {
+  bool success = 1;
+  Location location = 2;
+  string error = 3;
+}
+
+message ReverseGeocodeRequest {
+  Location location = 1;
+}
+
+message ReverseGeocodeResponse {
+  string address = 1;
+}
+
+message CafeSearchRequest {
+  Location location = 1;
+  float radius_km = 2;
+  int32 limit = 3;
+  CafeFilters filters = 4;
+}
+
+message CafeFilters {
+  string cuisine = 1;
+  string dietary = 2;
+  bool outdoor_seating = 3;
+  bool wifi = 4;
+}
+
+message CafeSearchResponse {
+  repeated Cafe cafes = 1;
+}
+
+message Cafe {
+  string id = 1;
+  string name = 2;
+  Location location = 3;
+  string address = 4;
+  repeated string rubrics = 5;
+  float rating = 6;
+}
+
+message WalkingRouteRequest {
+  repeated Location waypoints = 1;
+}
+
+message WalkingRouteResponse {
+  repeated Location geometry = 1;
+  float distance_km = 2;
+  int32 duration_minutes = 3;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  bool api_key_valid = 2;
+  int64 requests_today = 3;
+}

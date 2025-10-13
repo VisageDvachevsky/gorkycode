@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package routing;
+
+service RoutingService {
+  rpc OptimizeRoute(OptimizeRouteRequest) returns (OptimizeRouteResponse);
+  rpc CalculateRouteGeometry(RouteGeometryRequest) returns (RouteGeometryResponse);
+  rpc GetDistanceMatrix(DistanceMatrixRequest) returns (DistanceMatrixResponse);
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+message OptimizeRouteRequest {
+  Location start = 1;
+  repeated POILocation pois = 2;
+  float available_hours = 3;
+  string optimization_strategy = 4;
+}
+
+message Location {
+  float lat = 1;
+  float lon = 2;
+}
+
+message POILocation {
+  int32 id = 1;
+  float lat = 2;
+  float lon = 3;
+  int32 avg_visit_minutes = 4;
+}
+
+message OptimizeRouteResponse {
+  repeated int32 poi_order = 1;
+  float total_distance_km = 2;
+  int32 total_time_minutes = 3;
+  string algorithm_used = 4;
+  float optimization_score = 5;
+}
+
+message RouteGeometryRequest {
+  repeated Location waypoints = 1;
+  string transport_type = 2;
+}
+
+message RouteGeometryResponse {
+  repeated Location geometry = 1;
+  float distance_km = 2;
+  int32 duration_minutes = 3;
+}
+
+message DistanceMatrixRequest {
+  repeated Location sources = 1;
+  repeated Location targets = 2;
+  string transport_type = 3;
+}
+
+message DistanceMatrixResponse {
+  repeated Row matrix = 1;
+}
+
+message Row {
+  repeated float distances_km = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string version = 2;
+}

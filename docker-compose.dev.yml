@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # === Data Layer ===
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aitourist
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: aitourist_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev:/data
+
+  # === ML Service ===
+  ml-service:
+    build: ./services/ml
+    environment:
+      - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - REDIS_URL=redis://redis:6379/2
+      - GRPC_PORT=50051
+    ports:
+      - "50051:50051"
+    depends_on:
+      - redis
+
+  # === LLM Service ===
+  llm-service:
+    build: ./services/llm
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - GRPC_PORT=50052
+    ports:
+      - "50052:50052"
+    depends_on:
+      - redis
+
+  # === Celery Worker ===
+  celery-worker:
+    build: ./services/llm
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+
+  # === Routing Service ===
+  routing-service:
+    build: ./services/routing
+    environment:
+      - REDIS_URL=redis://redis:6379/3
+      - GRPC_PORT=50053
+    ports:
+      - "50053:50053"
+    depends_on:
+      - redis
+
+  # === Geocoding Service ===
+  geocoding-service:
+    build: ./services/geocoding
+    environment:
+      - TWOGIS_API_KEY=${TWOGIS_API_KEY}
+      - REDIS_URL=redis://redis:6379/4
+      - GRPC_PORT=50054
+    ports:
+      - "50054:50054"
+    depends_on:
+      - redis
+
+  # === API Gateway ===
+  gateway:
+    build: ./services/gateway
+    environment:
+      - DATABASE_URL=postgresql://aitourist:dev_password@postgres:5432/aitourist_db
+      - REDIS_URL=redis://redis:6379/0
+      - ML_SERVICE_HOST=ml-service
+      - ML_SERVICE_PORT=50051
+      - LLM_SERVICE_HOST=llm-service
+      - LLM_SERVICE_PORT=50052
+      - ROUTING_SERVICE_HOST=routing-service
+      - ROUTING_SERVICE_PORT=50053
+      - GEOCODING_SERVICE_HOST=geocoding-service
+      - GEOCODING_SERVICE_PORT=50054
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - ml-service
+      - llm-service
+      - routing-service
+      - geocoding-service
+
+  # === Frontend ===
+  frontend:
+    build:
+      context: ./frontend
+      target: development
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_dev:
+  redis_dev:

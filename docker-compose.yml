@@ -1,96 +1,426 @@
 version: '3.8'
 
-services:
-  db:
-    image: postgres:16-alpine
-    container_name: aitourist-db
-    environment:
-      POSTGRES_USER: aitourist
-      POSTGRES_PASSWORD: dev_password_change_in_prod
-      POSTGRES_DB: aitourist_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aitourist -d aitourist_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - aitourist-network
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
 
-  redis:
-    image: redis:7-alpine
-    container_name: aitourist-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - aitourist-network
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production  
-    container_name: aitourist-api
-    environment:
-      DATABASE_URL: postgresql://aitourist:dev_password_change_in_prod@db:5432/aitourist_db
-      REDIS_URL: redis://redis:6379/0
-      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-20250514}
-      ENVIRONMENT: production
-      PYTHONPATH: /app
-    volumes:
-      - ./data:/app/data:ro
-    ports:
-      - "8000:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - aitourist-network
-    restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: development
-    container_name: aitourist-frontend
-    environment:
-      VITE_API_URL: http://localhost:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    networks:
-      - aitourist-network
-    restart: unless-stopped
-    command: npm run dev -- --host 0.0.0.0
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
 
 networks:
-  aitourist-network:
+  frontend:
     driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+  data:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres_data:
   redis_data:
-  backend_cache:
+  ml_models:
+
+services:
+  # === Load Balancer ===
+  nginx:
+    image: nginx:alpine
+    container_name: aitourist-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - frontend
+    depends_on:
+      - gateway-1
+      - gateway-2
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+
+  # === API Gateway (Scaled 2x) ===
+  gateway-1:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: aitourist-gateway-1
+    environment:
+      - ENVIRONMENT=production
+      - ML_SERVICE_HOST=ml-service
+      - ML_SERVICE_PORT=50051
+      - LLM_SERVICE_HOST=llm-service
+      - LLM_SERVICE_PORT=50052
+      - ROUTING_SERVICE_HOST=routing-service
+      - ROUTING_SERVICE_PORT=50053
+      - GEOCODING_SERVICE_HOST=geocoding-service
+      - GEOCODING_SERVICE_PORT=50054
+      - DATABASE_URL=postgresql://aitourist:${DB_PASSWORD}@postgres:5432/aitourist_db
+      - REDIS_URL=redis://redis-master:6379/0
+      - CELERY_BROKER_URL=redis://redis-master:6379/1
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      ml-service:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+      routing-service:
+        condition: service_healthy
+      geocoding-service:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=2)"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  gateway-2:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: aitourist-gateway-2
+    environment:
+      - ENVIRONMENT=production
+      - ML_SERVICE_HOST=ml-service
+      - ML_SERVICE_PORT=50051
+      - LLM_SERVICE_HOST=llm-service
+      - LLM_SERVICE_PORT=50052
+      - ROUTING_SERVICE_HOST=routing-service
+      - ROUTING_SERVICE_PORT=50053
+      - GEOCODING_SERVICE_HOST=geocoding-service
+      - GEOCODING_SERVICE_PORT=50054
+      - DATABASE_URL=postgresql://aitourist:${DB_PASSWORD}@postgres:5432/aitourist_db
+      - REDIS_URL=redis://redis-master:6379/0
+      - CELERY_BROKER_URL=redis://redis-master:6379/1
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      ml-service:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+      routing-service:
+        condition: service_healthy
+      geocoding-service:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=2)"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # === ML Service (Embeddings) ===
+  ml-service:
+    build:
+      context: ./services/ml
+      dockerfile: Dockerfile
+    container_name: aitourist-ml
+    environment:
+      - MODEL_NAME=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - REDIS_URL=redis://redis-master:6379/2
+      - GRPC_PORT=50051
+      - WORKERS=4
+    volumes:
+      - ml_models:/models
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # === LLM Service ===
+  llm-service:
+    build:
+      context: ./services/llm
+      dockerfile: Dockerfile
+    container_name: aitourist-llm
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - LLM_MODEL=${LLM_MODEL:-claude-sonnet-4-20250514}
+      - CELERY_BROKER_URL=redis://redis-master:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-master:6379/1
+      - GRPC_PORT=50052
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "grpc_health_probe", "-addr=:50052"]
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # === Celery Workers (Scaled 2x) ===
+  celery-worker-1:
+    build:
+      context: ./services/llm
+      dockerfile: Dockerfile
+    container_name: aitourist-celery-1
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - CELERY_BROKER_URL=redis://redis-master:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-master:6379/1
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  celery-worker-2:
+    build:
+      context: ./services/llm
+      dockerfile: Dockerfile
+    container_name: aitourist-celery-2
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      - CELERY_BROKER_URL=redis://redis-master:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis-master:6379/1
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # === Routing Service ===
+  routing-service:
+    build:
+      context: ./services/routing
+      dockerfile: Dockerfile
+    container_name: aitourist-routing
+    environment:
+      - REDIS_URL=redis://redis-master:6379/3
+      - GRPC_PORT=50053
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "grpc_health_probe", "-addr=:50053"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+  # === Geocoding/2GIS Service ===
+  geocoding-service:
+    build:
+      context: ./services/geocoding
+      dockerfile: Dockerfile
+    container_name: aitourist-geocoding
+    environment:
+      - TWOGIS_API_KEY=${TWOGIS_API_KEY}
+      - REDIS_URL=redis://redis-master:6379/4
+      - GRPC_PORT=50054
+    networks:
+      - backend
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "grpc_health_probe", "-addr=:50054"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # === Data Layer ===
+  postgres:
+    image: postgres:16-alpine
+    container_name: aitourist-postgres
+    environment:
+      POSTGRES_USER: aitourist
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: aitourist_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - data
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U aitourist -d aitourist_db"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "work_mem=16MB"
+
+  redis-master:
+    image: redis:7-alpine
+    container_name: aitourist-redis
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - backend
+      - data
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+    command: redis-server /usr/local/etc/redis/redis.conf
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # === Frontend ===
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: aitourist-frontend
+    networks:
+      - frontend
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # === Monitoring (Optional) ===
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aitourist-prometheus
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - backend
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aitourist-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    networks:
+      - backend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    logging: *default-logging

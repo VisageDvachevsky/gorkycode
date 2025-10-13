@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "ml-service"
+version = "1.0.0"
+description = "ML embedding service"
+authors = []
+
+[tool.poetry.dependencies]
+python = "^3.11"
+grpcio = "^1.60.0"
+grpcio-tools = "^1.60.0"
+protobuf = "^4.25.0"
+sentence-transformers = "^2.3.1"
+torch = "^2.1.0"
+redis = "^5.0.0"
+numpy = "^1.26.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
