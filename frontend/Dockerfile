@@ -5,13 +5,13 @@ WORKDIR /app
 COPY package*.json ./
 
 FROM base as development
-RUN npm ci
+RUN npm install
 COPY . .
 EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 FROM base as builder
-RUN npm ci
+RUN npm install
 COPY . .
 RUN npm run build
 

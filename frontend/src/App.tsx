@@ -1,48 +1,94 @@
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import RouteForm from './components/RouteForm'
-import RouteDisplay from './components/RouteDisplay'
+import { AnimatePresence, motion } from 'framer-motion'
+import Hero from './components/Hero'
+import RouteWizard from './components/RouteWizard'
+import RouteViewer from './components/RouteViewer'
 import type { RouteResponse } from './types'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    },
+  },
+})
+
+type AppState = 'hero' | 'wizard' | 'viewing'
 
 function App() {
+  const [appState, setAppState] = useState<AppState>('hero')
   const [route, setRoute] = useState<RouteResponse | null>(null)
+
+  const handleStartJourney = () => {
+    setAppState('wizard')
+  }
+
+  const handleRouteGenerated = (newRoute: RouteResponse) => {
+    setRoute(newRoute)
+    setAppState('viewing')
+  }
+
+  const handleNewRoute = () => {
+    setRoute(null)
+    setAppState('wizard')
+  }
+
+  const handleBackToHero = () => {
+    setRoute(null)
+    setAppState('hero')
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <header className="bg-white shadow-sm border-b">
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            <h1 className="text-3xl font-bold text-gray-900">
-              🧭 AI-Tourist
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Персональные прогулки по Нижнему Новгороду
-            </p>
-          </div>
-        </header>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950 transition-colors duration-500">
+        <AnimatePresence mode="wait">
+          {appState === 'hero' && (
+            <motion.div
+              key="hero"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Hero onStartJourney={handleStartJourney} />
+            </motion.div>
+          )}
 
-        <main className="max-w-7xl mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div>
-              <RouteForm onRouteGenerated={setRoute} />
-            </div>
-            
-            <div>
-              {route ? (
-                <RouteDisplay route={route} />
-              ) : (
-                <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-                  <div className="text-gray-400 text-6xl mb-4">🗺️</div>
-                  <p className="text-gray-500">
-                    Заполните форму слева, чтобы получить персональный маршрут
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
+          {appState === 'wizard' && (
+            <motion.div
+              key="wizard"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="min-h-screen"
+            >
+              <RouteWizard
+                onRouteGenerated={handleRouteGenerated}
+                onBack={handleBackToHero}
+              />
+            </motion.div>
+          )}
+
+          {appState === 'viewing' && route && (
+            <motion.div
+              key="viewer"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.4 }}
+            >
+              <RouteViewer
+                route={route}
+                onNewRoute={handleNewRoute}
+                onBackToHero={handleBackToHero}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </QueryClientProvider>
   )
