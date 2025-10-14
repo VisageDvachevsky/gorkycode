@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-metrics
+  namespace: aitourist
+  labels:
+    app: gateway
+    metrics: "true"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: metrics
+  selector:
+    app: gateway
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gateway-monitor
+  namespace: aitourist
+  labels:
+    app: gateway
+spec:
+  selector:
+    matchLabels:
+      metrics: "true"
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ml-service-monitor
+  namespace: aitourist
+  labels:
+    app: ml-service
+spec:
+  selector:
+    matchLabels:
+      app: ml-service
+  endpoints:
+  - port: grpc
+    interval: 30s

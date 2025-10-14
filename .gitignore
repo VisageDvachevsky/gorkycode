@@ -180,3 +180,5 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 /frontend/node_modules
+minikube-linux-amd64
+k8s/02-secrets.yaml

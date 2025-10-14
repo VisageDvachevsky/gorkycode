@@ -1,191 +1,158 @@
-.PHONY: help proto build up down logs scale health test clean migrate backup restore
-
-COMPOSE := docker compose
-COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
-PROTO_DIR := proto
-SERVICES := gateway ml llm routing geocoding
+.PHONY: help setup build k8s-secrets k8s-build k8s-apply k8s-delete k8s-status k8s-logs k8s-restart dev-up dev-down clean check-structure fix-structure quickfix fix-frontend
 
 help:
-	@echo "🚀 AI-Tourist Microservices Management"
+	@echo "🌍 AI Tourist - Kubernetes Deployment"
 	@echo ""
-	@echo "Development:"
-	@echo "  make proto          Generate protobuf code for all services"
-	@echo "  make build          Build all service images"
-	@echo "  make up             Start all services (development)"
-	@echo "  make down           Stop all services"
-	@echo "  make restart        Restart all services"
-	@echo "  make logs           Show logs (all services)"
-	@echo "  make logs-<service> Show logs for specific service"
-	@echo ""
-	@echo "Production:"
-	@echo "  make prod-up        Start in production mode"
-	@echo "  make prod-down      Stop production deployment"
-	@echo "  make prod-deploy    Full production deployment"
-	@echo ""
-	@echo "Scaling:"
-	@echo "  make scale-gateway N=4    Scale API gateway to N instances"
-	@echo "  make scale-workers N=8    Scale Celery workers to N instances"
-	@echo ""
-	@echo "Operations:"
-	@echo "  make health         Check health of all services"
-	@echo "  make test           Run integration tests"
-	@echo "  make migrate        Run database migrations"
-	@echo "  make backup         Backup PostgreSQL database"
-	@echo "  make restore FILE=  Restore database from backup"
-	@echo ""
-	@echo "Maintenance:"
-	@echo "  make clean          Remove containers, volumes, networks"
-	@echo "  make clean-cache    Clear Redis cache"
-	@echo "  make rebuild        Full rebuild and restart"
+	@echo "📋 Available commands:"
+	@echo "  make check-structure    - Check project structure"
+	@echo "  make quickfix           - Interactive setup for your structure"
+	@echo "  make fix-frontend       - Fix frontend TypeScript errors"
+	@echo "  make fix-structure      - Auto-fix project structure"
+	@echo "  make setup              - Setup development environment"
+	@echo "  make build              - Build all Docker images"
+	@echo "  make k8s-secrets        - Generate k8s secrets from .env"
+	@echo "  make k8s-build          - Build Docker images for k8s"
+	@echo "  make k8s-load-images    - Load images into k8s cluster"
+	@echo "  make k8s-apply          - Deploy to Kubernetes"
+	@echo "  make k8s-delete         - Delete all k8s resources"
+	@echo "  make k8s-status         - Check deployment status"
+	@echo "  make k8s-logs           - View gateway logs"
+	@echo "  make k8s-restart        - Restart all services"
+	@echo "  make k8s-port           - Port forward services"
+	@echo "  make dev-up             - Start dev environment (docker-compose)"
+	@echo "  make dev-down           - Stop dev environment"
+	@echo "  make clean              - Clean up build artifacts"
 
-proto:
-	@echo "📦 Generating protobuf code..."
-	@for service in $(SERVICES); do \
-		python -m grpc_tools.protoc \
-			-I$(PROTO_DIR) \
-			--python_out=services/$$service/app/proto \
-			--grpc_python_out=services/$$service/app/proto \
-			$(PROTO_DIR)/*.proto; \
-		echo "✓ Generated proto for $$service"; \
-	done
+check-structure:
+	@bash scripts/check-structure.sh
+
+quickfix:
+	@bash scripts/quickfix.sh
+
+fix-frontend:
+	@bash scripts/fix-frontend-wizard.sh
+
+fix-structure:
+	@bash scripts/fix-structure.sh
+
+setup: check-structure
+	@echo "🔧 Setting up development environment..."
+	@chmod +x scripts/*.sh 2>/dev/null || true
+	@if [ ! -f .env ]; then \
+		echo "⚠️  .env file not found. Creating from template..."; \
+		cp .env.example .env 2>/dev/null || echo "Please create .env manually"; \
+	fi
+	@mkdir -p k8s
+	@echo "✅ Setup complete!"
+	@echo ""
+	@echo "📂 Project structure detected:"
+	@bash scripts/check-structure.sh | grep "✅" || echo "⚠️  Run 'make quickfix' to configure"
 
 build:
-	@echo "🔨 Building service images..."
-	$(COMPOSE) build --parallel
+	@bash scripts/build-images.sh
 
-up:
-	@echo "🚀 Starting services..."
-	$(COMPOSE) up -d
-	@echo "⏳ Waiting for services to be healthy..."
-	@sleep 5
-	@make health
+k8s-secrets:
+	@bash scripts/generate-k8s-secrets.sh
 
-down:
-	@echo "🛑 Stopping services..."
-	$(COMPOSE) down
+k8s-build: build
 
-restart:
-	@echo "🔄 Restarting services..."
-	$(COMPOSE) restart
+k8s-load-images:
+	@bash scripts/load-images.sh
 
-logs:
-	$(COMPOSE) logs -f --tail=100
+k8s-apply: k8s-secrets k8s-load-images
+	@bash scripts/k8s-apply.sh
 
-logs-gateway:
-	$(COMPOSE) logs -f gateway-1 gateway-2
+k8s-delete:
+	@bash scripts/k8s-delete.sh
 
-logs-ml:
-	$(COMPOSE) logs -f ml-service
+k8s-status:
+	@echo "📊 Kubernetes Resources Status:"
+	@echo ""
+	@kubectl get all -n aitourist
+	@echo ""
+	@echo "💾 Storage:"
+	@kubectl get pvc -n aitourist
+	@echo ""
+	@echo "🔌 Ingress:"
+	@kubectl get ingress -n aitourist
 
-logs-llm:
-	$(COMPOSE) logs -f llm-service
+k8s-logs:
+	@echo "📝 Gateway logs (Ctrl+C to exit):"
+	@kubectl logs -f -n aitourist -l app=gateway --tail=100
 
-logs-routing:
-	$(COMPOSE) logs -f routing-service
+k8s-logs-ml:
+	@echo "📝 ML Service logs (Ctrl+C to exit):"
+	@kubectl logs -f -n aitourist -l app=ml-service --tail=100
 
-logs-workers:
-	$(COMPOSE) logs -f celery-worker-1 celery-worker-2
+k8s-logs-all:
+	@echo "📝 All logs (Ctrl+C to exit):"
+	@kubectl logs -f -n aitourist --all-containers=true --tail=50
 
-prod-up:
-	@echo "🚀 Starting production deployment..."
-	$(COMPOSE_PROD) up -d
-	@make health
+k8s-restart:
+	@echo "🔄 Restarting all services..."
+	@kubectl rollout restart deployment -n aitourist
+	@echo "✅ Restart initiated. Check status with: make k8s-status"
 
-prod-down:
-	$(COMPOSE_PROD) down
+k8s-port:
+	@echo "🔌 Port forwarding services..."
+	@echo "   Gateway: http://localhost:8000"
+	@echo "   Frontend: http://localhost:3000"
+	@echo "   Grafana: http://localhost:3001"
+	@echo ""
+	@echo "Press Ctrl+C to stop port forwarding"
+	@kubectl port-forward -n aitourist svc/gateway 8000:8000 & \
+	kubectl port-forward -n aitourist svc/frontend 3000:80 & \
+	kubectl port-forward -n aitourist svc/grafana 3001:3000 & \
+	wait
 
-prod-deploy:
-	@echo "🚀 Full production deployment..."
-	@make proto
-	@make build
-	@$(COMPOSE_PROD) pull
-	@$(COMPOSE_PROD) up -d --remove-orphans
-	@echo "⏳ Waiting for services..."
-	@sleep 10
-	@make health
-	@echo "✅ Production deployment complete"
+k8s-shell-gateway:
+	@kubectl exec -it -n aitourist deployment/gateway -- /bin/bash
 
-scale-gateway:
-	@if [ -z "$(N)" ]; then echo "Usage: make scale-gateway N=4"; exit 1; fi
-	@echo "⚖️  Scaling API Gateway to $(N) instances..."
-	$(COMPOSE) up -d --scale gateway=$(N)
+k8s-shell-ml:
+	@kubectl exec -it -n aitourist deployment/ml-service -- /bin/bash
 
-scale-workers:
-	@if [ -z "$(N)" ]; then echo "Usage: make scale-workers N=8"; exit 1; fi
-	@echo "⚖️  Scaling Celery workers to $(N) instances..."
-	$(COMPOSE) up -d --scale celery-worker=$(N)
+k8s-db-psql:
+	@kubectl exec -it -n aitourist deployment/postgres -- psql -U postgres -d aitourist
 
-health:
-	@echo "🏥 Checking service health..."
-	@echo "\n=== API Gateway ==="
-	@curl -sf http://localhost/health | jq . || echo "❌ Gateway unhealthy"
-	@echo "\n=== ML Service ==="
-	@docker exec aitourist-ml grpc_health_probe -addr=:50051 && echo "✅ ML Service healthy" || echo "❌ ML Service unhealthy"
-	@echo "\n=== LLM Service ==="
-	@docker exec aitourist-llm grpc_health_probe -addr=:50052 && echo "✅ LLM Service healthy" || echo "❌ LLM Service unhealthy"
-	@echo "\n=== Routing Service ==="
-	@docker exec aitourist-routing grpc_health_probe -addr=:50053 && echo "✅ Routing Service healthy" || echo "❌ Routing Service unhealthy"
-	@echo "\n=== Geocoding Service ==="
-	@docker exec aitourist-geocoding grpc_health_probe -addr=:50054 && echo "✅ Geocoding Service healthy" || echo "❌ Geocoding Service unhealthy"
-	@echo "\n=== PostgreSQL ==="
-	@docker exec aitourist-postgres pg_isready -U aitourist && echo "✅ PostgreSQL healthy" || echo "❌ PostgreSQL unhealthy"
-	@echo "\n=== Redis ==="
-	@docker exec aitourist-redis redis-cli ping && echo "✅ Redis healthy" || echo "❌ Redis unhealthy"
+dev-up:
+	@echo "🚀 Starting development environment..."
+	@docker-compose -f docker-compose.dev.yml up -d
+	@echo "✅ Dev environment running!"
+	@echo "   Gateway: http://localhost:8000"
+	@echo "   Frontend: http://localhost:3000"
 
-test:
-	@echo "🧪 Running integration tests..."
-	@pytest tests/integration -v --tb=short
+dev-down:
+	@echo "🛑 Stopping development environment..."
+	@docker-compose -f docker-compose.dev.yml down
+	@echo "✅ Dev environment stopped"
 
-migrate:
-	@echo "🗄️  Running database migrations..."
-	$(COMPOSE) exec gateway-1 alembic upgrade head
-
-backup:
-	@echo "💾 Creating database backup..."
-	@mkdir -p backups
-	@docker exec aitourist-postgres pg_dump -U aitourist aitourist_db | gzip > backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz
-	@echo "✅ Backup created: backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz"
-
-restore:
-	@if [ -z "$(FILE)" ]; then echo "Usage: make restore FILE=backups/backup.sql.gz"; exit 1; fi
-	@echo "📥 Restoring database from $(FILE)..."
-	@gunzip -c $(FILE) | docker exec -i aitourist-postgres psql -U aitourist aitourist_db
-	@echo "✅ Database restored"
+dev-logs:
+	@docker-compose -f docker-compose.dev.yml logs -f
 
 clean:
-	@echo "🧹 Cleaning up..."
-	$(COMPOSE) down -v --remove-orphans
-	@docker system prune -f
-	@echo "✅ Cleanup complete"
+	@echo "🧹 Cleaning build artifacts..."
+	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "node_modules" -exec rm -rf {} + 2>/dev/null || true
+	@find . -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
+	@rm -f k8s/02-secrets.yaml
+	@rm -f .k8s-config
+	@echo "✅ Clean complete!"
 
-clean-cache:
-	@echo "🧹 Clearing Redis cache..."
-	@docker exec aitourist-redis redis-cli FLUSHALL
-	@echo "✅ Cache cleared"
+k8s-full-deploy: check-structure fix-structure setup k8s-build k8s-apply k8s-status
+	@echo ""
+	@echo "🎉 Full deployment complete!"
+	@echo ""
+	@echo "💡 Next steps:"
+	@echo "   1. Port forward: make k8s-port"
+	@echo "   2. Access app: http://localhost:3000"
+	@echo "   3. View logs: make k8s-logs"
+	@echo ""
+	@echo "Or use the one-command script:"
+	@echo "   bash deploy.sh"
 
-rebuild:
-	@echo "🔨 Full rebuild..."
-	@make down
-	@make build
-	@make up
-	@echo "✅ Rebuild complete"
+k8s-redeploy: k8s-delete k8s-full-deploy
 
-watch:
-	@echo "👀 Watching logs (Ctrl+C to stop)..."
-	$(COMPOSE) logs -f
-
-stats:
-	@echo "📊 Service statistics..."
-	@docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
-
-shell-gateway:
-	$(COMPOSE) exec gateway-1 /bin/bash
-
-shell-ml:
-	$(COMPOSE) exec ml-service /bin/bash
-
-shell-db:
-	$(COMPOSE) exec postgres psql -U aitourist aitourist_db
-
-shell-redis:
-	$(COMPOSE) exec redis-master redis-cli
+one-click-deploy:
+	@chmod +x deploy.sh
+	@./deploy.sh

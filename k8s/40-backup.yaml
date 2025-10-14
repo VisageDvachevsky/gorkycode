@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: aitourist
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: aitourist
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: postgres:15-alpine
+            command:
+            - /bin/sh
+            - -c
+            - |
+              BACKUP_FILE="/backups/backup-$(date +%Y%m%d-%H%M%S).sql.gz"
+              pg_dump -h postgres -U postgres -d aitourist | gzip > $BACKUP_FILE
+              echo "Backup created: $BACKUP_FILE"
+              
+              # Keep only last 7 backups
+              cd /backups
+              ls -t backup-*.sql.gz | tail -n +8 | xargs -r rm
+              
+              echo "Backup completed successfully"
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: aitourist-secrets
+                  key: DB_PASSWORD
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: backup-pvc
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore
+  namespace: aitourist
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: restore
+        image: postgres:15-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          if [ -z "$BACKUP_FILE" ]; then
+            echo "Error: BACKUP_FILE environment variable not set"
+            exit 1
+          fi
+          
+          if [ ! -f "/backups/$BACKUP_FILE" ]; then
+            echo "Error: Backup file not found: /backups/$BACKUP_FILE"
+            exit 1
+          fi
+          
+          echo "Restoring from: /backups/$BACKUP_FILE"
+          gunzip < "/backups/$BACKUP_FILE" | psql -h postgres -U postgres -d aitourist
+          
+          echo "Restore completed successfully"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: aitourist-secrets
+              key: DB_PASSWORD
+        - name: BACKUP_FILE
+          value: ""
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-pvc
