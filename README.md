@@ -722,7 +722,7 @@ Pull requests приветствуются! Для major changes создайт�
 Developed by **Visage Dvachevsky** для хакатона GorkyCode 2025
 
 **Special thanks:**
-- Anthropic Claude для LLM capabilities
+- Anthropic Claude & OpenAI ChatGPT для LLM capabilities
 - Sentence Transformers community
 - Kubernetes contributors
 - Нижний Новгород за вдохновение 🏛️
