@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package embedding;
+
+service EmbeddingService {
+  rpc GenerateEmbedding(EmbeddingRequest) returns (EmbeddingResponse);
+  rpc BatchEmbedding(BatchEmbeddingRequest) returns (BatchEmbeddingResponse);
+}
+
+message EmbeddingRequest {
+  string text = 1;
+  bool use_cache = 2;
+}
+
+message EmbeddingResponse {
+  repeated float vector = 1;
+  bool from_cache = 2;
+  int32 dimension = 3;
+}
+
+message BatchEmbeddingRequest {
+  repeated string texts = 1;
+  bool use_cache = 2;
+}
+
+message BatchEmbeddingResponse {
+  repeated EmbeddingVector vectors = 1;
+}
+
+message EmbeddingVector {
+  repeated float vector = 1;
+  bool from_cache = 2;
+}
