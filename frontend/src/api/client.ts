@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { RouteRequest, RouteResponse, Category } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = window.location.origin
 
 const client = axios.create({
   baseURL: `${API_URL}/api/v1`,
