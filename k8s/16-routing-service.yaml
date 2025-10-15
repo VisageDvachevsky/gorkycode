@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: routing-service
+  namespace: aitourist
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: routing-service
+  template:
+    metadata:
+      labels:
+        app: routing-service
+    spec:
+      containers:
+      - name: routing-service
+        image: aitourist/routing-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50053
+          name: grpc
+        env:
+        - name: GRPC_PORT
+          value: "50053"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: routing-service
+  namespace: aitourist
+spec:
+  type: ClusterIP
+  ports:
+  - port: 50053
+    targetPort: 50053
+    protocol: TCP
+    name: grpc
+  selector:
+    app: routing-service

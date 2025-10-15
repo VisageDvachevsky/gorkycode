@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geocoding-service
+  namespace: aitourist
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: geocoding-service
+  template:
+    metadata:
+      labels:
+        app: geocoding-service
+    spec:
+      containers:
+      - name: geocoding-service
+        image: aitourist/geocoding-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50054
+          name: grpc
+        env:
+        - name: TWOGIS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aitourist-secrets
+              key: TWOGIS_API_KEY
+        - name: GRPC_PORT
+          value: "50054"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: geocoding-service
+  namespace: aitourist
+spec:
+  type: ClusterIP
+  ports:
+  - port: 50054
+    targetPort: 50054
+    protocol: TCP
+    name: grpc
+  selector:
+    app: geocoding-service

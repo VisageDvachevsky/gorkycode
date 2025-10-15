@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-service
+  namespace: aitourist
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: llm-service
+  template:
+    metadata:
+      labels:
+        app: llm-service
+    spec:
+      containers:
+      - name: llm-service
+        image: aitourist/llm-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 50052
+          name: grpc
+        env:
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: aitourist-config
+              key: LLM_PROVIDER
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: aitourist-config
+              key: LLM_MODEL
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aitourist-secrets
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aitourist-secrets
+              key: ANTHROPIC_API_KEY
+        - name: GRPC_PORT
+          value: "50052"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-service
+  namespace: aitourist
+spec:
+  type: ClusterIP
+  ports:
+  - port: 50052
+    targetPort: 50052
+    protocol: TCP
+    name: grpc
+  selector:
+    app: llm-service

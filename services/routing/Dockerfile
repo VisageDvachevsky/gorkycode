@@ -1,6 +1,19 @@
 FROM python:3.11-slim
+
 WORKDIR /app
+
 COPY pyproject.toml poetry.lock* ./
-RUN pip install poetry && poetry install --only main --no-root
-COPY app/ ./app/
+
+RUN pip install poetry && \
+    poetry config virtualenvs.in-project true && \
+    poetry install --only main --no-root --no-directory
+
+COPY . .
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+EXPOSE 50053
+
 CMD ["python", "-m", "app.server"]

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import PostgresDsn, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,7 +16,12 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
     
-    DATABASE_URL: PostgresDsn
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_NAME: str = "aitourist"
+    DB_USER: str = "postgres"
+    DB_PASSWORD: str
+    DATABASE_URL: Optional[str] = None
     REDIS_URL: str = "redis://redis:6379/0"
     
     TWOGIS_API_KEY: str | None = None
@@ -40,6 +45,11 @@ class Settings(BaseSettings):
     
     TRANSIT_DISTANCE_THRESHOLD_KM: float = 2.0
     COFFEE_SEARCH_RADIUS_KM: float = 0.5
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if not self.DATABASE_URL:
+            self.DATABASE_URL = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

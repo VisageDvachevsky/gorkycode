@@ -1,41 +1,20 @@
-.PHONY: help setup build k8s-secrets k8s-build k8s-apply k8s-delete k8s-status k8s-logs k8s-restart dev-up dev-down clean check-structure fix-structure quickfix fix-frontend
+.PHONY: help setup build k8s-secrets k8s-build k8s-apply k8s-delete k8s-status k8s-logs k8s-restart k8s-port-stop k8s-port dev-up dev-down clean
 
 help:
 	@echo "🌍 AI Tourist - Kubernetes Deployment"
 	@echo ""
 	@echo "📋 Available commands:"
-	@echo "  make check-structure    - Check project structure"
-	@echo "  make quickfix           - Interactive setup for your structure"
-	@echo "  make fix-frontend       - Fix frontend TypeScript errors"
-	@echo "  make fix-structure      - Auto-fix project structure"
 	@echo "  make setup              - Setup development environment"
 	@echo "  make build              - Build all Docker images"
-	@echo "  make k8s-secrets        - Generate k8s secrets from .env"
-	@echo "  make k8s-build          - Build Docker images for k8s"
-	@echo "  make k8s-load-images    - Load images into k8s cluster"
 	@echo "  make k8s-apply          - Deploy to Kubernetes"
-	@echo "  make k8s-delete         - Delete all k8s resources"
 	@echo "  make k8s-status         - Check deployment status"
+	@echo "  make k8s-port           - Port forward services (auto-cleanup)"
+	@echo "  make k8s-port-stop      - Stop all port forwarding"
 	@echo "  make k8s-logs           - View gateway logs"
 	@echo "  make k8s-restart        - Restart all services"
-	@echo "  make k8s-port           - Port forward services"
-	@echo "  make dev-up             - Start dev environment (docker-compose)"
-	@echo "  make dev-down           - Stop dev environment"
 	@echo "  make clean              - Clean up build artifacts"
 
-check-structure:
-	@bash scripts/check-structure.sh
-
-quickfix:
-	@bash scripts/quickfix.sh
-
-fix-frontend:
-	@bash scripts/fix-frontend-wizard.sh
-
-fix-structure:
-	@bash scripts/fix-structure.sh
-
-setup: check-structure
+setup:
 	@echo "🔧 Setting up development environment..."
 	@chmod +x scripts/*.sh 2>/dev/null || true
 	@if [ ! -f .env ]; then \
@@ -44,9 +23,6 @@ setup: check-structure
 	fi
 	@mkdir -p k8s
 	@echo "✅ Setup complete!"
-	@echo ""
-	@echo "📂 Project structure detected:"
-	@bash scripts/check-structure.sh | grep "✅" || echo "⚠️  Run 'make quickfix' to configure"
 
 build:
 	@bash scripts/build-images.sh
@@ -70,11 +46,15 @@ k8s-status:
 	@echo ""
 	@kubectl get all -n aitourist
 	@echo ""
-	@echo "💾 Storage:"
+	@echo "💾 Persistent Volumes:"
 	@kubectl get pvc -n aitourist
 	@echo ""
-	@echo "🔌 Ingress:"
-	@kubectl get ingress -n aitourist
+	@echo "🔧 HPA Status:"
+	@kubectl get hpa -n aitourist
+	@echo ""
+	@echo "📈 Resource Usage:"
+	@kubectl top nodes 2>/dev/null || echo "⚠️  Metrics server not enabled"
+	@kubectl top pods -n aitourist --sort-by=memory 2>/dev/null || true
 
 k8s-logs:
 	@echo "📝 Gateway logs (Ctrl+C to exit):"
@@ -93,16 +73,35 @@ k8s-restart:
 	@kubectl rollout restart deployment -n aitourist
 	@echo "✅ Restart initiated. Check status with: make k8s-status"
 
-k8s-port:
-	@echo "🔌 Port forwarding services..."
-	@echo "   Gateway: http://localhost:8000"
-	@echo "   Frontend: http://localhost:3000"
-	@echo "   Grafana: http://localhost:3001"
+k8s-port-stop:
+	@echo "🛑 Stopping port forwarding..."
+	@killall kubectl 2>/dev/null || true
+	@sudo kill -9 $$(sudo lsof -t -i:8000) 2>/dev/null || true
+	@sudo kill -9 $$(sudo lsof -t -i:3000) 2>/dev/null || true
+	@sudo kill -9 $$(sudo lsof -t -i:3001) 2>/dev/null || true
+	@sleep 1
+	@echo "✅ Port forwarding stopped"
+
+k8s-port: k8s-port-stop
+	@echo "🔌 Starting port forwarding..."
+	@echo "   Gateway API: http://localhost:8000"
+	@echo "   Frontend:    http://localhost:3000"
+	@echo "   Grafana:     http://localhost:3001"
 	@echo ""
-	@echo "Press Ctrl+C to stop port forwarding"
-	@kubectl port-forward -n aitourist svc/gateway 8000:8000 & \
-	kubectl port-forward -n aitourist svc/frontend 3000:80 & \
-	kubectl port-forward -n aitourist svc/grafana 3001:3000 & \
+	@echo "⏳ Waiting for services..."
+	@kubectl wait --for=condition=ready pod -l app=gateway -n aitourist --timeout=60s || true
+	@kubectl port-forward -n aitourist svc/gateway 8000:8000 > /dev/null 2>&1 & \
+	kubectl port-forward -n aitourist svc/frontend 3000:80 > /dev/null 2>&1 & \
+	kubectl port-forward -n aitourist svc/grafana 3001:3000 > /dev/null 2>&1 & \
+	sleep 3 && \
+	echo "" && \
+	echo "✅ Port forwarding active!" && \
+	echo "" && \
+	echo "📖 API Documentation: http://localhost:8000/docs" && \
+	echo "🎨 Frontend App:      http://localhost:3000" && \
+	echo "📊 Grafana:           http://localhost:3001" && \
+	echo "" && \
+	echo "Press Ctrl+C to stop (or run: make k8s-port-stop)" && \
 	wait
 
 k8s-shell-gateway:
@@ -116,18 +115,18 @@ k8s-db-psql:
 
 dev-up:
 	@echo "🚀 Starting development environment..."
-	@docker-compose -f docker-compose.dev.yml up -d
+	@docker-compose up -d
 	@echo "✅ Dev environment running!"
 	@echo "   Gateway: http://localhost:8000"
 	@echo "   Frontend: http://localhost:3000"
 
 dev-down:
 	@echo "🛑 Stopping development environment..."
-	@docker-compose -f docker-compose.dev.yml down
+	@docker-compose down
 	@echo "✅ Dev environment stopped"
 
 dev-logs:
-	@docker-compose -f docker-compose.dev.yml logs -f
+	@docker-compose logs -f
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -137,22 +136,14 @@ clean:
 	@find . -type d -name "dist" -exec rm -rf {} + 2>/dev/null || true
 	@rm -f k8s/02-secrets.yaml
 	@rm -f .k8s-config
+	@docker system prune -f
 	@echo "✅ Clean complete!"
 
-k8s-full-deploy: check-structure fix-structure setup k8s-build k8s-apply k8s-status
+k8s-full-deploy: setup k8s-build k8s-apply
 	@echo ""
 	@echo "🎉 Full deployment complete!"
 	@echo ""
 	@echo "💡 Next steps:"
-	@echo "   1. Port forward: make k8s-port"
-	@echo "   2. Access app: http://localhost:3000"
-	@echo "   3. View logs: make k8s-logs"
-	@echo ""
-	@echo "Or use the one-command script:"
-	@echo "   bash deploy.sh"
-
-k8s-redeploy: k8s-delete k8s-full-deploy
-
-one-click-deploy:
-	@chmod +x deploy.sh
-	@./deploy.sh
+	@echo "   make k8s-status    - Check status"
+	@echo "   make k8s-port      - Access services"
+	@echo "   make k8s-logs      - View logs"

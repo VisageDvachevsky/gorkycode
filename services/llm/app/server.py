@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from celery.result import AsyncResult
 
-from proto import llm_pb2, llm_pb2_grpc
+from app.proto import llm_pb2, llm_pb2_grpc
 from app.workers.celery_app import celery_app
 from app.workers.tasks import generate_route_explanation_task
 
@@ -215,7 +215,7 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return json.loads(content)
 
 
-def serve(provider: str, model: str, api_key: str, port: int = 50052):
+async def serve(provider: str, model: str, api_key: str, port: int = 50052):
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=4))
     
     servicer = LLMServicer(provider, model, api_key)
@@ -224,14 +224,16 @@ def serve(provider: str, model: str, api_key: str, port: int = 50052):
     server.add_insecure_port(f'[::]:{port}')
     
     logger.info(f"🚀 LLM Service listening on port {port}")
-    server.start()
-    server.wait_for_termination()
+    await server.start()
+    await server.wait_for_termination()
 
 
 if __name__ == '__main__':
+    import asyncio 
+
     provider = os.getenv('LLM_PROVIDER', 'anthropic')
     model = os.getenv('LLM_MODEL', 'claude-sonnet-4-20250514')
     api_key = os.getenv('ANTHROPIC_API_KEY') if provider == 'anthropic' else os.getenv('OPENAI_API_KEY')
     port = int(os.getenv('GRPC_PORT', '50052'))
     
-    serve(provider, model, api_key, port)
+    asyncio.run(serve(provider, model, api_key, port))

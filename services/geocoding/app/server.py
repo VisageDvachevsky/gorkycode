@@ -5,7 +5,7 @@ import httpx
 import os
 from typing import Optional, Tuple
 
-from proto import geocoding_pb2, geocoding_pb2_grpc
+from app.proto import geocoding_pb2, geocoding_pb2_grpc
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -249,7 +249,7 @@ class GeocodingServicer(geocoding_pb2_grpc.GeocodingServiceServicer):
         return total
 
 
-def serve(api_key: str, port: int = 50054):
+async def serve(api_key: str, port: int = 50054):
     server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=4))
     
     servicer = GeocodingServicer(api_key)
@@ -258,14 +258,17 @@ def serve(api_key: str, port: int = 50054):
     server.add_insecure_port(f'[::]:{port}')
     
     logger.info(f"🚀 Geocoding Service listening on port {port}")
-    server.start()
-    server.wait_for_termination()
+    await server.start()
+    await server.wait_for_termination()
+
 
 
 if __name__ == '__main__':
+    import asyncio
+
     api_key = os.getenv('TWOGIS_API_KEY')
     if not api_key:
         raise ValueError("TWOGIS_API_KEY required")
     
     port = int(os.getenv('GRPC_PORT', '50054'))
-    serve(api_key, port)
+    asyncio.run(serve(api_key, port))

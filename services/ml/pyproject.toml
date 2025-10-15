@@ -10,7 +10,7 @@ grpcio = "^1.60.0"
 grpcio-tools = "^1.60.0"
 protobuf = "^4.25.0"
 sentence-transformers = "^2.3.1"
-torch = "^2.1.0"
+grpcio-health-checking = "^1.60.0"
 redis = "^5.0.0"
 numpy = "^1.26.0"
 

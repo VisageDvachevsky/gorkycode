@@ -8,7 +8,10 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import redis.asyncio as redis
 
-from proto import ml_pb2, ml_pb2_grpc
+from app.proto import ml_pb2, ml_pb2_grpc
+
+from grpc_health.v1 import health_pb2, health_pb2_grpc
+from grpc_health.v1.health import HealthServicer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -126,7 +129,7 @@ class EmbeddingServicer(ml_pb2_grpc.EmbeddingServiceServicer):
         )
 
 
-def serve(model_name: str, redis_url: str, port: int = 50051, max_workers: int = 4):
+async def serve(model_name: str, redis_url: str, port: int = 50051, max_workers: int = 4):
     server = grpc.aio.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         options=[
@@ -137,20 +140,25 @@ def serve(model_name: str, redis_url: str, port: int = 50051, max_workers: int =
     
     servicer = EmbeddingServicer(model_name, redis_url)
     ml_pb2_grpc.add_EmbeddingServiceServicer_to_server(servicer, server)
+
+    health_servicer = HealthServicer()
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
     
     server.add_insecure_port(f'[::]:{port}')
     
     logger.info(f"🚀 ML Service listening on port {port}")
-    server.start()
-    server.wait_for_termination()
+    await server.start()
+    await server.wait_for_termination()
 
 
 if __name__ == '__main__':
     import os
+    import asyncio
     
     model = os.getenv('MODEL_NAME', 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
     redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/2')
     port = int(os.getenv('GRPC_PORT', '50051'))
     workers = int(os.getenv('WORKERS', '4'))
     
-    serve(model, redis_url, port, workers)
+    asyncio.run(serve(model, redis_url, port, workers))
