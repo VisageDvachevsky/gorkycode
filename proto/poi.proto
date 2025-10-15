@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package poi;
+
+service POIService {
+  rpc GetAllPOIs(GetPOIsRequest) returns (GetPOIsResponse);
+  rpc FindNearbyCoffeeShops(CoffeeShopRequest) returns (CoffeeShopResponse);
+  rpc InsertCoffeeBreaks(CoffeeBreakRequest) returns (CoffeeBreakResponse);
+}
+
+message GetPOIsRequest {
+  repeated string categories = 1;
+  bool with_embeddings = 2;
+}
+
+message GetPOIsResponse {
+  repeated POI pois = 1;
+}
+
+message POI {
+  int32 id = 1;
+  string name = 2;
+  double lat = 3;
+  double lon = 4;
+  string category = 5;
+  repeated string tags = 6;
+  string description = 7;
+  int32 avg_visit_minutes = 8;
+  double rating = 9;
+  repeated float embedding = 10;
+  string local_tip = 11;
+  string photo_tip = 12;
+}
+
+message CoffeeShopRequest {
+  double lat = 1;
+  double lon = 2;
+  int32 radius_meters = 3;
+  int32 limit = 4;
+}
+
+message CoffeeShopResponse {
+  repeated CoffeeShop coffee_shops = 1;
+}
+
+message CoffeeShop {
+  string name = 1;
+  double lat = 2;
+  double lon = 3;
+  double rating = 4;
+  int32 avg_visit_minutes = 5;
+  string description = 6;
+}
+
+message CoffeeBreakRequest {
+  repeated POI route = 1;
+  int32 interval_minutes = 2;
+  CoffeePreferences preferences = 3;
+}
+
+message CoffeePreferences {
+  bool enabled = 1;
+  int32 interval_minutes = 2;
+  repeated string preferred_types = 3;
+}
+
+message CoffeeBreakResponse {
+  repeated POI updated_route = 1;
+}

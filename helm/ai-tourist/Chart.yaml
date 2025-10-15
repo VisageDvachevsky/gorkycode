@@ -1,0 +1,13 @@
+apiVersion: v2
+name: ai-tourist
+description: AI-powered tourist route planning system with microservices architecture
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+keywords:
+  - ai
+  - tourism
+  - microservices
+  - grpc
+maintainers:
+  - name: AI-Tourist Team
