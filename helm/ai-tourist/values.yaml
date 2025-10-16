@@ -1,0 +1,205 @@
+global:
+  environment: production
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+
+secrets:
+  dbPassword: ""
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  twogisApiKey: ""
+  jwtSecret: ""
+  encryptionKey: ""
+
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"
+
+postgresql:
+  enabled: true
+  image: postgres:16-alpine
+  port: 5432
+  database: aitourist_db
+  username: aitourist
+  persistence:
+    enabled: true
+    size: 5Gi
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  port: 6379
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+
+apiGateway:
+  name: api-gateway
+  image: ai-tourist/api-gateway
+  tag: latest
+  replicas: 2
+  port: 8000
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+embeddingService:
+  name: embedding-service
+  image: ai-tourist/embedding-service
+  tag: latest
+  replicas: 2
+  port: 50051
+  metricsPort: 9090
+  model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+rankingService:
+  name: ranking-service
+  image: ai-tourist/ranking-service
+  tag: latest
+  replicas: 2
+  port: 50052
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+routePlannerService:
+  name: route-planner-service
+  image: ai-tourist/route-planner-service
+  tag: latest
+  replicas: 2
+  port: 50053
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+llmService:
+  name: llm-service
+  image: ai-tourist/llm-service
+  tag: latest
+  replicas: 1
+  port: 50054
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "125m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+
+geocodingService:
+  name: geocoding-service
+  image: ai-tourist/geocoding-service
+  tag: latest
+  replicas: 1
+  port: 50055
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "125m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+poiService:
+  name: poi-service
+  image: ai-tourist/poi-service
+  tag: latest
+  replicas: 1
+  port: 50056
+  metricsPort: 9090
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+frontend:
+  name: frontend
+  image: ai-tourist/frontend
+  tag: latest
+  replicas: 2
+  port: 80
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: ""
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: api-gateway
+
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    retention: 7d
+  grafana:
+    enabled: true
+    adminPassword: "admin"
+  jaeger:
+    enabled: true
+
+autoscaling:
+  enabled: false
+  apiGateway:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  embeddingService:
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
