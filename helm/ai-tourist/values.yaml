@@ -16,6 +16,7 @@ llm:
   model: "gpt-4o-mini"
 
 postgresql:
+  name: ai-tourist-postgresql
   enabled: true
   image: postgres:16-alpine
   port: 5432

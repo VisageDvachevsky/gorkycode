@@ -97,6 +97,10 @@ k8s-logs:
 	@echo "📋 Streaming logs from all services..."
 	@kubectl logs -f -n $(NAMESPACE) -l app.kubernetes.io/instance=$(HELM_RELEASE) --all-containers=true --tail=100
 
+k8s-load-pois:
+	@echo "📦 Loading POIs to Kubernetes database..."
+	@bash scripts/load-pois-to-k8s.sh
+
 k8s-stop:
 	@echo "🛑 Stopping all services..."
 	helm uninstall $(HELM_RELEASE) -n $(NAMESPACE) || true
@@ -145,4 +149,4 @@ grafana:
 jaeger:
 	@echo "🔍 Opening Jaeger..."
 	@xdg-open http://$$(minikube ip --profile=$(CLUSTER_NAME)):16686 2>/dev/null || \
-	 echo "Open http://$$(minikube ip --profile=$(CLUSTER_NAME)):16686"
+	 echo "Open http://$$(minikube ip --profile=$(CLUSTER_NAME)):16686"	

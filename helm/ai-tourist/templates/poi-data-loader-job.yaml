@@ -16,6 +16,7 @@ data:
         db_url = os.environ.get('DATABASE_URL')
 
         print("Connecting to database...")
+        print(f"Using DATABASE_URL: {db_url}")
         conn = await asyncpg.connect(db_url)
 
         try:
@@ -25,10 +26,8 @@ data:
                 print(f"POIs already loaded ({count} entries), skipping...")
                 return
 
-            print("Loading POI data from /data/poi.json...")
+            print("Loading POI data...")
 
-            # Note: In production, you would mount the actual poi.json file
-            # For now, this is a placeholder that creates a minimal dataset
             sample_pois = [
                 {
                     "name": "Кремль Нижнего Новгорода",
@@ -105,12 +104,20 @@ spec:
         - sh
         - -c
         - |
-          until psql "postgresql://{{ .Values.postgresql.username }}:${DB_PASSWORD}@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}" -c "SELECT 1 FROM pois LIMIT 1" 2>/dev/null; do
+          until psql "postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}" -c "SELECT 1 FROM pois LIMIT 1" 2>/dev/null; do
             echo "Waiting for database migration...";
             sleep 5;
           done;
           echo "Migration complete!";
         env:
+        - name: DB_USER
+          value: "{{ .Values.postgresql.username }}"
+        - name: DB_HOST
+          value: {{ .Values.postgresql.name | default "ai-tourist-postgresql" | quote }}
+        - name: DB_PORT
+          value: {{ .Values.postgresql.port | quote }}
+        - name: DB_NAME
+          value: "{{ .Values.postgresql.database }}"
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -124,10 +131,17 @@ spec:
         - -c
         - |
           pip install --no-cache-dir asyncpg
+          export DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
           python /scripts/load_pois.py
         env:
-        - name: DATABASE_URL
-          value: "postgresql://{{ .Values.postgresql.username }}:$(DB_PASSWORD)@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}"
+        - name: DB_USER
+          value: "{{ .Values.postgresql.username }}"
+        - name: DB_HOST
+          value: {{ .Values.postgresql.name | default "ai-tourist-postgresql" | quote }}
+        - name: DB_PORT
+          value: {{ .Values.postgresql.port | quote }}
+        - name: DB_NAME
+          value: "{{ .Values.postgresql.database }}"
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:

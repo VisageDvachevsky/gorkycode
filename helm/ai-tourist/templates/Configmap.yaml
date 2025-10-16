@@ -7,7 +7,7 @@ metadata:
 data:
   ENVIRONMENT: {{ .Values.global.environment | quote }}
   
-  DATABASE_URL: "postgresql://{{ .Values.postgresql.username }}:$(DB_PASSWORD)@{{ include "ai-tourist.fullname" . }}-postgresql:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}"
+  DATABASE_URL: "postgresql+asyncpg://{{ .Values.postgresql.username }}:$(DB_PASSWORD)@{{ include "ai-tourist.fullname" . }}-postgresql:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}"
   REDIS_URL: "redis://{{ include "ai-tourist.fullname" . }}-redis:{{ .Values.redis.port }}/0"
   
   LLM_PROVIDER: {{ .Values.llm.provider | quote }}

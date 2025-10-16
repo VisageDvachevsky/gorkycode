@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 import time
 
 from app.api.router import api_router
