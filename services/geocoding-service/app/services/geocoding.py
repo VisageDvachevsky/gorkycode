@@ -11,9 +11,16 @@ class GeocodingServicer(geocoding_pb2_grpc.GeocodingServiceServicer):
     def __init__(self):
         self.twogis_api_key = settings.TWOGIS_API_KEY
         self.nn_bounds = {
-            "lat_min": 56.2, "lat_max": 56.4,
-            "lon_min": 43.8, "lon_max": 44.1
+            "lat_min": settings.NN_LAT_MIN,
+            "lat_max": settings.NN_LAT_MAX,
+            "lon_min": settings.NN_LON_MIN,
+            "lon_max": settings.NN_LON_MAX
         }
+
+    async def initialize(self):
+        """Initialize geocoding service"""
+        logger.info("✓ Geocoding Service initialized")
+        logger.info(f"Nizhny Novgorod bounds: lat[{self.nn_bounds['lat_min']}, {self.nn_bounds['lat_max']}], lon[{self.nn_bounds['lon_min']}, {self.nn_bounds['lon_max']}]")
     
     async def GeocodeAddress(
         self,

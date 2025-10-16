@@ -257,6 +257,137 @@ docker compose exec backend poetry run python scripts/load_pois.py
 
 ---
 
+## ☸️ Kubernetes Deployment (Production-Ready)
+
+The application now supports production-grade Kubernetes deployment with microservices architecture and gRPC communication.
+
+### Prerequisites
+
+- Kubernetes cluster (minikube, k3s, or cloud provider)
+- kubectl configured
+- Helm 3.x installed
+
+### Microservices Architecture
+
+The application has been migrated to 7 microservices:
+
+| Service | Port | Description |
+|---------|------|-------------|
+| **API Gateway** | 8000 | FastAPI gateway for HTTP requests |
+| **Embedding Service** | 50051 | Sentence transformers for text embeddings |
+| **Ranking Service** | 50052 | POI scoring and ranking |
+| **Route Planner** | 50053 | TSP-based route optimization |
+| **LLM Service** | 50054 | Claude/GPT explanations |
+| **Geocoding Service** | 50055 | Address validation via 2GIS API |
+| **POI Service** | 50056 | POI database and coffee shop search |
+
+### Quick Start with Kubernetes
+
+1. **Setup environment variables**
+
+```bash
+cp .env.example .env
+# Fill in your API keys and database credentials
+./scripts/env-to-yaml.sh  # Converts .env to Helm secrets
+```
+
+2. **Install with Helm**
+
+```bash
+make k8s-install  # Installs with one command
+```
+
+Or manually:
+
+```bash
+helm install ai-tourist ./helm/ai-tourist \
+  --create-namespace \
+  --namespace ai-tourist \
+  --values .env.yaml
+```
+
+3. **Check deployment status**
+
+```bash
+kubectl get pods -n ai-tourist
+kubectl get services -n ai-tourist
+```
+
+4. **Access the application**
+
+Get the Minikube IP:
+
+```bash
+minikube service list -n ai-tourist
+```
+
+Open the frontend at `http://<MINIKUBE_IP>:<NODE_PORT>`
+
+### Makefile Commands for Kubernetes
+
+```bash
+make k8s-install     # Install Helm chart
+make k8s-deploy      # Deploy/upgrade application
+make k8s-uninstall   # Remove deployment
+make k8s-logs        # Show all pod logs
+make k8s-status      # Check pod status
+make proto-gen       # Generate gRPC proto files
+make setup-check     # Verify cluster requirements
+```
+
+### Database Migrations
+
+Database migrations run automatically via Helm hooks:
+
+- Migration Job creates POI table schema
+- Data Loader Job inserts initial POI data
+- Jobs run on `post-install` and `post-upgrade`
+
+### Monitoring & Observability
+
+All services expose Prometheus metrics on port 9090:
+
+- `/metrics` endpoint on each service
+- Automatic scraping via annotations
+- Grafana dashboards (optional)
+- Jaeger tracing (optional)
+
+### Configuration
+
+Edit `helm/ai-tourist/values.yaml` to customize:
+
+- Replica counts per service
+- Resource limits (CPU/memory)
+- Image tags and registries
+- LLM provider (OpenAI vs Anthropic)
+- Database persistence size
+
+### Troubleshooting
+
+**Pods not starting:**
+
+```bash
+kubectl describe pod <pod-name> -n ai-tourist
+kubectl logs <pod-name> -n ai-tourist
+```
+
+**Database connection issues:**
+
+```bash
+kubectl exec -it postgres-0 -n ai-tourist -- psql -U aitourist -d aitourist_db
+```
+
+**gRPC communication errors:**
+
+Check service discovery:
+
+```bash
+kubectl get svc -n ai-tourist
+kubectl get endpoints -n ai-tourist
+```
+
+---
+
 ## 🧪 Тестирование
 
 ```bash

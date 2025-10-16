@@ -11,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
     def __init__(self):
-        self.walk_speed_kmh = 4.0
+        self.walk_speed_kmh = settings.WALK_SPEED_KMH
+
+    async def initialize(self):
+        """Initialize service"""
+        logger.info("✓ Route Planner Service initialized")
     
     async def OptimizeRoute(
         self,
