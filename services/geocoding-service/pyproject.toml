@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "geocoding-service"
+version = "2.0.0"
+description = "Geocoding and validation microservice using 2GIS API"
+authors = ["AI-Tourist Team"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+grpcio = "^1.60.0"
+grpcio-tools = "^1.60.0"
+pydantic-settings = "^2.1.0"
+prometheus-client = "^0.19.0"
+httpx = "^0.26.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
