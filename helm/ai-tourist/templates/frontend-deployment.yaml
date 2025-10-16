@@ -18,7 +18,7 @@ spec:
       containers:
       - name: frontend
         image: "{{ .Values.frontend.image }}:{{ .Values.frontend.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: {{ .Values.frontend.port }}

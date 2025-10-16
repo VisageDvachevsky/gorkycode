@@ -21,7 +21,7 @@ spec:
       containers:
       - name: ranking-service
         image: "{{ .Values.rankingService.image }}:{{ .Values.rankingService.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: IfNotPresent
         ports:
         - name: grpc
           containerPort: {{ .Values.rankingService.port }}

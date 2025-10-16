@@ -1,206 +1,227 @@
-global:
-  environment: production
-  imageRegistry: ""
-  imagePullPolicy: IfNotPresent
-
-secrets:
-  dbPassword: ""
-  openaiApiKey: ""
-  anthropicApiKey: ""
-  twogisApiKey: ""
-  jwtSecret: ""
-  encryptionKey: ""
-
-llm:
-  provider: "openai"
-  model: "gpt-4o-mini"
-
-postgresql:
-  name: ai-tourist-postgresql
-  enabled: true
-  image: postgres:16-alpine
-  port: 5432
-  database: aitourist_db
-  username: aitourist
-  persistence:
-    enabled: true
-    size: 5Gi
+frontend:
+  replicaCount: 2
+  image:
+    repository: ai-tourist-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    port: 80
+  
   resources:
     requests:
-      memory: "1Gi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
-redis:
-  enabled: true
-  image: redis:7-alpine
-  port: 6379
-  persistence:
-    enabled: true
-    size: 1Gi
-  resources:
-    requests:
-      memory: "256Mi"
+      memory: "128Mi"
       cpu: "100m"
     limits:
-      memory: "512Mi"
-      cpu: "250m"
+      memory: "256Mi"
+      cpu: "200m"
+  
+  env:
+    - name: VITE_API_URL
+      value: ""  # Empty = use relative path /api
 
 apiGateway:
-  name: api-gateway
-  image: ai-tourist/api-gateway
-  tag: latest
-  replicas: 2
-  port: 8000
-  metricsPort: 9090
+  replicaCount: 2
+  image:
+    repository: ai-tourist-api-gateway
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    httpPort: 8000
+    metricsPort: 9090
+  
   resources:
     requests:
       memory: "256Mi"
-      cpu: "250m"
+      cpu: "200m"
     limits:
       memory: "512Mi"
       cpu: "500m"
-
-embeddingService:
-  name: embedding-service
-  image: ai-tourist/embedding-service
-  tag: latest
-  replicas: 2
-  port: 50051
-  metricsPort: 9090
-  model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-  resources:
-    requests:
-      memory: "1Gi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
-rankingService:
-  name: ranking-service
-  image: ai-tourist/ranking-service
-  tag: latest
-  replicas: 2
-  port: 50052
-  metricsPort: 9090
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "500m"
-    limits:
-      memory: "2Gi"
-      cpu: "1000m"
-
-routePlannerService:
-  name: route-planner-service
-  image: ai-tourist/route-planner-service
-  tag: latest
-  replicas: 2
-  port: 50053
-  metricsPort: 9090
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-
-llmService:
-  name: llm-service
-  image: ai-tourist/llm-service
-  tag: latest
-  replicas: 1
-  port: 50054
-  metricsPort: 9090
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "125m"
-    limits:
-      memory: "512Mi"
-      cpu: "250m"
-
-geocodingService:
-  name: geocoding-service
-  image: ai-tourist/geocoding-service
-  tag: latest
-  replicas: 1
-  port: 50055
-  metricsPort: 9090
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "125m"
-    limits:
-      memory: "256Mi"
-      cpu: "250m"
-
-poiService:
-  name: poi-service
-  image: ai-tourist/poi-service
-  tag: latest
-  replicas: 1
-  port: 50056
-  metricsPort: 9090
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-
-frontend:
-  name: frontend
-  image: ai-tourist/frontend
-  tag: latest
-  replicas: 2
-  port: 80
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "100m"
-    limits:
-      memory: "256Mi"
-      cpu: "250m"
 
 ingress:
   enabled: true
   className: nginx
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
   hosts:
-    - host: ""
+    - host: ""  # Empty = match all hosts
       paths:
-        - path: /
-          pathType: Prefix
-          service: frontend
-        - path: /api
-          pathType: Prefix
-          service: api-gateway
+        - path: /()(.*)
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: frontend
+              port: 80
+        - path: /api(/|$)(.*)
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: api-gateway
+              port: 8000
 
-monitoring:
+# Database configuration
+postgresql:
   enabled: true
-  prometheus:
-    enabled: true
-    retention: 7d
-  grafana:
-    enabled: true
-    adminPassword: "admin"
-  jaeger:
-    enabled: true
+  auth:
+    username: aitourist
+    password: secure_password_change_in_prod
+    database: aitourist_db
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+    
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
 
-autoscaling:
-  enabled: false
-  apiGateway:
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-  embeddingService:
-    minReplicas: 2
-    maxReplicas: 8
-    targetCPUUtilizationPercentage: 70
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: false
+  
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# Service configurations
+embeddingService:
+  replicaCount: 2
+  image:
+    repository: ai-tourist-embedding-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+rankingService:
+  replicaCount: 2
+  image:
+    repository: ai-tourist-ranking-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+routePlannerService:
+  replicaCount: 2
+  image:
+    repository: ai-tourist-route-planner-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+llmService:
+  replicaCount: 1
+  image:
+    repository: ai-tourist-llm-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  env:
+    - name: LLM_PROVIDER
+      value: "anthropic"
+    - name: LLM_MODEL
+      value: "claude-sonnet-4-20250514"
+    - name: ANTHROPIC_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ai-tourist-secrets
+          key: anthropic-api-key
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+geocodingService:
+  replicaCount: 1
+  image:
+    repository: ai-tourist-geocoding-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  env:
+    - name: TWOGIS_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: ai-tourist-secrets
+          key: twogis-api-key
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+poiService:
+  replicaCount: 1
+  image:
+    repository: ai-tourist-poi-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Jobs
+jobs:
+  dbMigration:
+    image:
+      repository: ai-tourist-db-migration
+      tag: latest
+      pullPolicy: IfNotPresent
+  
+  poiLoader:
+    image:
+      repository: ai-tourist-poi-loader
+      tag: latest
+      pullPolicy: IfNotPresent

@@ -14,7 +14,6 @@ spec:
     metadata:
       labels:
         app: {{ .Values.apiGateway.name }}
-        {{- include "ai-tourist.selectorLabels" . | nindent 8 }}
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.apiGateway.metricsPort }}"
@@ -23,7 +22,7 @@ spec:
       containers:
       - name: api-gateway
         image: "{{ .Values.apiGateway.image }}:{{ .Values.apiGateway.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: {{ .Values.apiGateway.port }}

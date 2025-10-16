@@ -21,7 +21,7 @@ spec:
       containers:
       - name: poi-service
         image: "{{ .Values.poiService.image }}:{{ .Values.poiService.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: IfNotPresent
         ports:
         - name: grpc
           containerPort: {{ .Values.poiService.port }}

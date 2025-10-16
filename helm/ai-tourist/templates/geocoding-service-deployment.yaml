@@ -21,7 +21,7 @@ spec:
       containers:
       - name: geocoding-service
         image: "{{ .Values.geocodingService.image }}:{{ .Values.geocodingService.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: IfNotPresent
         ports:
         - name: grpc
           containerPort: {{ .Values.geocodingService.port }}
