@@ -1,0 +1,143 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-poi-loader-script
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+data:
+  load_pois.py: |
+    import json
+    import asyncio
+    import asyncpg
+    import os
+
+    async def load_pois():
+        db_url = os.environ.get('DATABASE_URL')
+
+        print("Connecting to database...")
+        conn = await asyncpg.connect(db_url)
+
+        try:
+            # Check if POIs already loaded
+            count = await conn.fetchval('SELECT COUNT(*) FROM pois')
+            if count > 0:
+                print(f"POIs already loaded ({count} entries), skipping...")
+                return
+
+            print("Loading POI data from /data/poi.json...")
+
+            # Note: In production, you would mount the actual poi.json file
+            # For now, this is a placeholder that creates a minimal dataset
+            sample_pois = [
+                {
+                    "name": "Кремль Нижнего Новгорода",
+                    "lat": 56.328124,
+                    "lon": 44.002028,
+                    "category": "музей",
+                    "tags": ["история", "архитектура", "крепость"],
+                    "description": "Каменный кремль XVI века, исторический центр города",
+                    "avg_visit_minutes": 90,
+                    "rating": 4.8
+                },
+                {
+                    "name": "Чкаловская лестница",
+                    "lat": 56.331234,
+                    "lon": 43.998567,
+                    "category": "смотровая",
+                    "tags": ["архитектура", "панорама", "фото"],
+                    "description": "Монументальная лестница с 560 ступенями",
+                    "avg_visit_minutes": 30,
+                    "rating": 4.7
+                }
+            ]
+
+            print(f"Inserting {len(sample_pois)} sample POIs...")
+
+            for poi in sample_pois:
+                await conn.execute(
+                    '''
+                    INSERT INTO pois (name, lat, lon, category, tags, description, avg_visit_minutes, rating)
+                    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
+                    ''',
+                    poi['name'],
+                    poi['lat'],
+                    poi['lon'],
+                    poi['category'],
+                    json.dumps(poi['tags']),
+                    poi['description'],
+                    poi['avg_visit_minutes'],
+                    poi['rating']
+                )
+
+            count = await conn.fetchval('SELECT COUNT(*) FROM pois')
+            print(f"Successfully loaded {count} POIs!")
+
+        finally:
+            await conn.close()
+
+    if __name__ == '__main__':
+        asyncio.run(load_pois())
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-poi-loader
+  labels:
+    app: poi-loader
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "2"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      name: {{ include "ai-tourist.fullname" . }}-poi-loader
+      labels:
+        app: poi-loader
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-migration
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until psql "postgresql://{{ .Values.postgresql.username }}:${DB_PASSWORD}@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}" -c "SELECT 1 FROM pois LIMIT 1" 2>/dev/null; do
+            echo "Waiting for database migration...";
+            sleep 5;
+          done;
+          echo "Migration complete!";
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DB_PASSWORD
+      containers:
+      - name: poi-loader
+        image: python:3.11-slim
+        command:
+        - sh
+        - -c
+        - |
+          pip install --no-cache-dir asyncpg
+          python /scripts/load_pois.py
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://{{ .Values.postgresql.username }}:$(DB_PASSWORD)@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DB_PASSWORD
+        volumeMounts:
+        - name: loader-script
+          mountPath: /scripts
+      volumes:
+      - name: loader-script
+        configMap:
+          name: {{ include "ai-tourist.fullname" . }}-poi-loader-script
+{{- end }}

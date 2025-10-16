@@ -1,0 +1,87 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-db-migration
+  labels:
+    app: db-migration
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      name: {{ include "ai-tourist.fullname" . }}-db-migration
+      labels:
+        app: db-migration
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h {{ .Values.postgresql.name | default "postgres" }} -p {{ .Values.postgresql.port }} -U {{ .Values.postgresql.username }}; do
+            echo "Waiting for PostgreSQL...";
+            sleep 2;
+          done;
+          echo "PostgreSQL is ready!";
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DB_PASSWORD
+      containers:
+      - name: db-migration
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          psql "postgresql://{{ .Values.postgresql.username }}:${DB_PASSWORD}@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}" <<'EOSQL'
+
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+          CREATE TABLE IF NOT EXISTS pois (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) NOT NULL,
+              name_en VARCHAR(255),
+              lat DOUBLE PRECISION NOT NULL,
+              lon DOUBLE PRECISION NOT NULL,
+              address VARCHAR(500),
+              category VARCHAR(100) NOT NULL,
+              tags JSONB DEFAULT '[]'::jsonb,
+              description TEXT,
+              description_en TEXT,
+              photo_tip TEXT,
+              local_tip TEXT,
+              avg_visit_minutes INTEGER DEFAULT 30,
+              open_time TIME,
+              close_time TIME,
+              social_mode VARCHAR(50) DEFAULT 'any',
+              intensity_level VARCHAR(50) DEFAULT 'medium',
+              rating DOUBLE PRECISION DEFAULT 0.0,
+              embedding JSONB,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_pois_category ON pois(category);
+          CREATE INDEX IF NOT EXISTS idx_pois_location ON pois(lat, lon);
+          CREATE INDEX IF NOT EXISTS idx_pois_rating ON pois(rating);
+
+          EOSQL
+
+          echo "Database migration completed successfully!"
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DB_PASSWORD
+{{- end }}
