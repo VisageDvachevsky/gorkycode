@@ -1,39 +1,22 @@
-from fastapi import APIRouter
-from typing import List
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict
 import logging
 
-from app.grpc.clients import grpc_clients
-from app.grpc.proto import poi_pb2
-
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
+MOCK_CATEGORIES = [
+    {"id": "museums", "name": "Музеи", "count": 15},
+    {"id": "parks", "name": "Парки", "count": 12},
+    {"id": "churches", "name": "Храмы", "count": 8},
+]
 
-class CategoryResponse(BaseModel):
-    value: str
-    label: str
-    count: int
-
-
-@router.get("/list", response_model=List[CategoryResponse])
+@router.get("/")
 async def get_categories():
-    """Get all available POI categories with counts"""
-    logger.info("Fetching categories from POI service")
-    
-    response = await grpc_clients.poi.GetCategories(
-        poi_pb2.Empty()
-    )
-    
-    categories = [
-        CategoryResponse(
-            value=cat.value,
-            label=cat.label,
-            count=cat.count
-        )
-        for cat in response.categories
-    ]
-    
-    logger.info(f"Retrieved {len(categories)} categories")
-    return categories
+    """Get all available POI categories"""
+    return MOCK_CATEGORIES
+
+@router.get("/popular")
+async def get_popular_categories(limit: int = 5):
+    """Get most popular categories"""
+    return MOCK_CATEGORIES[:limit]
