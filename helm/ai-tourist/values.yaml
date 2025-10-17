@@ -1,14 +1,28 @@
+# Global settings
+global:
+  environment: production
+
+# Secrets (override with .env.yaml)
+secrets:
+  dbPassword: "change_in_production"
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  twogisApiKey: ""
+  jwtSecret: "generate_random_secret"
+  encryptionKey: "generate_random_key"
+
+# LLM Configuration
+llm:
+  provider: "anthropic"
+  model: "claude-sonnet-4-20250514"
+
+# Frontend
 frontend:
-  replicaCount: 2
-  image:
-    repository: ai-tourist-frontend
-    tag: latest
-    pullPolicy: IfNotPresent
-  
-  service:
-    type: ClusterIP
-    port: 80
-  
+  name: "frontend"
+  replicas: 2
+  image: "ai-tourist-frontend"
+  tag: "latest"
+  port: 80
   resources:
     requests:
       memory: "128Mi"
@@ -16,23 +30,15 @@ frontend:
     limits:
       memory: "256Mi"
       cpu: "200m"
-  
-  env:
-    - name: VITE_API_URL
-      value: ""  # Empty = use relative path /api
 
+# API Gateway
 apiGateway:
-  replicaCount: 2
-  image:
-    repository: ai-tourist-api-gateway
-    tag: latest
-    pullPolicy: IfNotPresent
-  
-  service:
-    type: ClusterIP
-    httpPort: 8000
-    metricsPort: 9090
-  
+  name: "api-gateway"
+  replicas: 2
+  image: "ai-tourist-api-gateway"
+  tag: "latest"
+  port: 8000
+  metricsPort: 9090
   resources:
     requests:
       memory: "256Mi"
@@ -41,76 +47,15 @@ apiGateway:
       memory: "512Mi"
       cpu: "500m"
 
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/use-regex: "true"
-  hosts:
-    - host: ""  # Empty = match all hosts
-      paths:
-        - path: /()(.*)
-          pathType: ImplementationSpecific
-          backend:
-            service:
-              name: frontend
-              port: 80
-        - path: /api(/|$)(.*)
-          pathType: ImplementationSpecific
-          backend:
-            service:
-              name: api-gateway
-              port: 8000
-
-# Database configuration
-postgresql:
-  enabled: true
-  auth:
-    username: aitourist
-    password: secure_password_change_in_prod
-    database: aitourist_db
-  
-  primary:
-    persistence:
-      enabled: true
-      size: 1Gi
-    
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "250m"
-      limits:
-        memory: "512Mi"
-        cpu: "500m"
-
-# Redis configuration
-redis:
-  enabled: true
-  auth:
-    enabled: false
-  
-  master:
-    persistence:
-      enabled: true
-      size: 1Gi
-    
-    resources:
-      requests:
-        memory: "128Mi"
-        cpu: "100m"
-      limits:
-        memory: "256Mi"
-        cpu: "200m"
-
-# Service configurations
+# Embedding Service
 embeddingService:
-  replicaCount: 2
-  image:
-    repository: ai-tourist-embedding-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
+  name: "embedding-service"
+  replicas: 2
+  image: "ai-tourist-embedding-service"
+  tag: "latest"
+  port: 50051
+  metricsPort: 9090
+  model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
   resources:
     requests:
       memory: "512Mi"
@@ -119,13 +64,14 @@ embeddingService:
       memory: "1Gi"
       cpu: "1000m"
 
+# Ranking Service
 rankingService:
-  replicaCount: 2
-  image:
-    repository: ai-tourist-ranking-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
+  name: "ranking-service"
+  replicas: 2
+  image: "ai-tourist-ranking-service"
+  tag: "latest"
+  port: 50052
+  metricsPort: 9090
   resources:
     requests:
       memory: "256Mi"
@@ -134,13 +80,14 @@ rankingService:
       memory: "512Mi"
       cpu: "500m"
 
+# Route Planner Service
 routePlannerService:
-  replicaCount: 2
-  image:
-    repository: ai-tourist-route-planner-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
+  name: "route-planner-service"
+  replicas: 2
+  image: "ai-tourist-route-planner-service"
+  tag: "latest"
+  port: 50053
+  metricsPort: 9090
   resources:
     requests:
       memory: "256Mi"
@@ -149,24 +96,14 @@ routePlannerService:
       memory: "512Mi"
       cpu: "500m"
 
+# LLM Service
 llmService:
-  replicaCount: 1
-  image:
-    repository: ai-tourist-llm-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
-  env:
-    - name: LLM_PROVIDER
-      value: "anthropic"
-    - name: LLM_MODEL
-      value: "claude-sonnet-4-20250514"
-    - name: ANTHROPIC_API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: ai-tourist-secrets
-          key: anthropic-api-key
-  
+  name: "llm-service"
+  replicas: 1
+  image: "ai-tourist-llm-service"
+  tag: "latest"
+  port: 50054
+  metricsPort: 9090
   resources:
     requests:
       memory: "256Mi"
@@ -175,20 +112,14 @@ llmService:
       memory: "512Mi"
       cpu: "500m"
 
+# Geocoding Service
 geocodingService:
-  replicaCount: 1
-  image:
-    repository: ai-tourist-geocoding-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
-  env:
-    - name: TWOGIS_API_KEY
-      valueFrom:
-        secretKeyRef:
-          name: ai-tourist-secrets
-          key: twogis-api-key
-  
+  name: "geocoding-service"
+  replicas: 1
+  image: "ai-tourist-geocoding-service"
+  tag: "latest"
+  port: 50055
+  metricsPort: 9090
   resources:
     requests:
       memory: "128Mi"
@@ -197,13 +128,14 @@ geocodingService:
       memory: "256Mi"
       cpu: "200m"
 
+# POI Service
 poiService:
-  replicaCount: 1
-  image:
-    repository: ai-tourist-poi-service
-    tag: latest
-    pullPolicy: IfNotPresent
-  
+  name: "poi-service"
+  replicas: 1
+  image: "ai-tourist-poi-service"
+  tag: "latest"
+  port: 50056
+  metricsPort: 9090
   resources:
     requests:
       memory: "256Mi"
@@ -212,16 +144,42 @@ poiService:
       memory: "512Mi"
       cpu: "500m"
 
-# Jobs
-jobs:
-  dbMigration:
-    image:
-      repository: ai-tourist-db-migration
-      tag: latest
-      pullPolicy: IfNotPresent
-  
-  poiLoader:
-    image:
-      repository: ai-tourist-poi-loader
-      tag: latest
-      pullPolicy: IfNotPresent
+# PostgreSQL
+postgresql:
+  enabled: true
+  username: "aitourist"
+  password: "secure_password_change_in_prod"
+  database: "aitourist_db"
+  port: 5432
+  image: "postgres:16-alpine"
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+# Redis
+redis:
+  enabled: true
+  port: 6379
+  image: "redis:7-alpine"
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Ingress
+ingress:
+  enabled: true
+  className: nginx

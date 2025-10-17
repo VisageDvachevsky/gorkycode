@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --no-cache-dir poetry==1.7.1
 
-# Копируем файлы из правильного пути относительно корня проекта
 COPY services/api-gateway/pyproject.toml services/api-gateway/poetry.lock* ./
 
 RUN poetry config virtualenvs.create false && \
@@ -23,13 +22,10 @@ WORKDIR /app
 # Копируем proto из корня проекта
 COPY proto/ ./proto/
 
-# Копируем app из сервиса
-COPY services/api-gateway/app ./app
-
-# Создаем директорию для сгенерированных файлов
+# Создаем директорию для proto ПЕРЕД копированием app
 RUN mkdir -p ./app/grpc/proto
 
-# Generate proto files
+# Generate proto files ПЕРЕД копированием app
 RUN python -m grpc_tools.protoc \
     -I./proto \
     --python_out=./app/grpc/proto \
@@ -37,14 +33,18 @@ RUN python -m grpc_tools.protoc \
     --pyi_out=./app/grpc/proto \
     ./proto/*.proto
 
-# Фиксим импорты в сгенерированных файлах
+# Фиксим импорты
 RUN find ./app/grpc/proto -name "*_pb2_grpc.py" -exec sed -i 's/^import \([a-z_]*\)_pb2/from . import \1_pb2/' {} \;
 
 # Создаем __init__.py
 RUN touch ./app/grpc/proto/__init__.py
 
-# Проверяем что файлы сгенерированы
-RUN echo "Generated proto files:" && ls -la ./app/grpc/proto/
+# ТЕПЕРЬ копируем app (без перезаписи proto)
+COPY services/api-gateway/app ./app
+
+# Проверяем что proto на месте
+RUN echo "Generated proto files:" && ls -la ./app/grpc/proto/ && \
+    echo "Testing import..." && python -c "from app.grpc.proto import poi_pb2; print('✓ Import successful')"
 
 EXPOSE 8000 9090
 
