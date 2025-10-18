@@ -1,0 +1,19 @@
+{{- if .Values.poiService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-poi-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: poi-service
+spec:
+  type: {{ .Values.poiService.service.type }}
+  ports:
+    - port: {{ .Values.poiService.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ai-tourist.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: poi-service
+{{- end }}

@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.rankingService.name }}
+  name: {{ include "ai-tourist.fullname" . }}-ranking-service
   labels:
     app: {{ .Values.rankingService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
@@ -16,7 +16,7 @@ spec:
         app: {{ .Values.rankingService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "{{ .Values.rankingService.metricsPort }}"
+        prometheus.io/port: "9092"
     spec:
       containers:
       - name: ranking-service
@@ -24,9 +24,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - name: grpc
-          containerPort: {{ .Values.rankingService.port }}
+          containerPort: {{ .Values.rankingService.service.port }}
         - name: metrics
-          containerPort: {{ .Values.rankingService.metricsPort }}
+          containerPort: 9092
         envFrom:
         - configMapRef:
             name: {{ include "ai-tourist.fullname" . }}-config
@@ -44,23 +44,3 @@ spec:
             port: grpc
           initialDelaySeconds: 10
           periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ .Values.rankingService.name }}
-  labels:
-    app: {{ .Values.rankingService.name }}
-spec:
-  type: ClusterIP
-  ports:
-  - port: {{ .Values.rankingService.port }}
-    targetPort: grpc
-    protocol: TCP
-    name: grpc
-  - port: {{ .Values.rankingService.metricsPort }}
-    targetPort: metrics
-    protocol: TCP
-    name: metrics
-  selector:
-    app: {{ .Values.rankingService.name }}
