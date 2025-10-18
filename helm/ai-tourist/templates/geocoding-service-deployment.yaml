@@ -3,20 +3,20 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-geocoding-service
   labels:
-    app: geocoding-service
+    app: {{ .Values.geocodingService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.geocodingService.replicaCount }}
+  replicas: {{ .Values.geocodingService.replicas }}
   selector:
     matchLabels:
-      app: geocoding-service
+      app: {{ .Values.geocodingService.name }}
   template:
     metadata:
       labels:
-        app: geocoding-service
+        app: {{ .Values.geocodingService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9095"
+        prometheus.io/port: "{{ .Values.geocodingService.metricsPort }}"
     spec:
       containers:
       - name: geocoding-service
@@ -26,12 +26,21 @@ spec:
         - name: grpc
           containerPort: {{ .Values.geocodingService.service.port }}
         - name: metrics
-          containerPort: 9095
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.geocodingService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.geocodingService.service.port }}"
+        - name: TWOGIS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: TWOGIS_API_KEY
+              optional: true
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.geocodingService.resources | nindent 12 }}
         livenessProbe:

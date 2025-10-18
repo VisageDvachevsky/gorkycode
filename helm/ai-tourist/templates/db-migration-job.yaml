@@ -11,6 +11,8 @@ metadata:
     "helm.sh/hook-weight": "1"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
   template:
     metadata:
       name: {{ include "ai-tourist.fullname" . }}-db-migration
@@ -25,7 +27,7 @@ spec:
         - sh
         - -c
         - |
-          until pg_isready -h {{ .Values.postgresql.name | default "postgres" }} -p {{ .Values.postgresql.port }} -U {{ .Values.postgresql.username }}; do
+          until pg_isready -h {{ include "ai-tourist.fullname" . }}-postgresql -p 5432 -U {{ .Values.postgresql.auth.username }}; do
             echo "Waiting for PostgreSQL...";
             sleep 2;
           done;
@@ -43,7 +45,7 @@ spec:
         - sh
         - -c
         - |
-          psql "postgresql://{{ .Values.postgresql.username }}:${DB_PASSWORD}@{{ .Values.postgresql.name | default "postgres" }}:{{ .Values.postgresql.port }}/{{ .Values.postgresql.database }}" <<'EOSQL'
+          psql "postgresql://{{ .Values.postgresql.auth.username }}:${DB_PASSWORD}@{{ include "ai-tourist.fullname" . }}-postgresql:5432/{{ .Values.postgresql.auth.database }}" <<'EOSQL'
 
           CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -55,7 +57,7 @@ spec:
               lon DOUBLE PRECISION NOT NULL,
               address VARCHAR(500),
               category VARCHAR(100) NOT NULL,
-              tags JSONB DEFAULT '[]'::jsonb,
+              tags TEXT[] DEFAULT '{}',
               description TEXT,
               description_en TEXT,
               photo_tip TEXT,
@@ -66,14 +68,14 @@ spec:
               social_mode VARCHAR(50) DEFAULT 'any',
               intensity_level VARCHAR(50) DEFAULT 'medium',
               rating DOUBLE PRECISION DEFAULT 0.0,
-              embedding JSONB,
+              embedding DOUBLE PRECISION[],
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           );
 
           CREATE INDEX IF NOT EXISTS idx_pois_category ON pois(category);
-          CREATE INDEX IF NOT EXISTS idx_pois_location ON pois(lat, lon);
-          CREATE INDEX IF NOT EXISTS idx_pois_rating ON pois(rating);
+          CREATE INDEX IF NOT EXISTS idx_pois_location ON pois USING gist (point(lat, lon));
+          CREATE INDEX IF NOT EXISTS idx_pois_rating ON pois(rating DESC);
 
           EOSQL
 

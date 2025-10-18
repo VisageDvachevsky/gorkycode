@@ -3,20 +3,20 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-embedding-service
   labels:
-    app: embedding-service
+    app: {{ .Values.embeddingService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.embeddingService.replicaCount }}
+  replicas: {{ .Values.embeddingService.replicas }}
   selector:
     matchLabels:
-      app: embedding-service
+      app: {{ .Values.embeddingService.name }}
   template:
     metadata:
       labels:
-        app: embedding-service
+        app: {{ .Values.embeddingService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9091"
+        prometheus.io/port: "{{ .Values.embeddingService.metricsPort }}"
     spec:
       containers:
       - name: embedding-service
@@ -26,12 +26,25 @@ spec:
         - name: grpc
           containerPort: {{ .Values.embeddingService.service.port }}
         - name: metrics
-          containerPort: 9091
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.embeddingService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.embeddingService.service.port }}"
+        - name: EMBEDDING_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: EMBEDDING_MODEL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: REDIS_URL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.embeddingService.resources | nindent 12 }}
         livenessProbe:
@@ -44,4 +57,3 @@ spec:
             port: grpc
           initialDelaySeconds: 10
           periodSeconds: 5
----

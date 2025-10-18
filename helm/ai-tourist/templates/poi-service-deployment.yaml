@@ -3,21 +3,39 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-poi-service
   labels:
-    app: poi-service
+    app: {{ .Values.poiService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.poiService.replicaCount }}
+  replicas: {{ .Values.poiService.replicas }}
   selector:
     matchLabels:
-      app: poi-service
+      app: {{ .Values.poiService.name }}
   template:
     metadata:
       labels:
-        app: poi-service
+        app: {{ .Values.poiService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9096"
+        prometheus.io/port: "{{ .Values.poiService.metricsPort }}"
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h {{ include "ai-tourist.fullname" . }}-postgresql -p 5432 -U {{ .Values.postgresql.auth.username }}; do
+            echo "Waiting for PostgreSQL...";
+            sleep 2;
+          done;
+          echo "PostgreSQL is ready!";
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DB_PASSWORD
       containers:
       - name: poi-service
         image: "{{ .Values.poiService.image.repository }}:{{ .Values.poiService.image.tag }}"
@@ -26,12 +44,31 @@ spec:
         - name: grpc
           containerPort: {{ .Values.poiService.service.port }}
         - name: metrics
-          containerPort: 9096
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.poiService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.poiService.service.port }}"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DATABASE_URL
+        - name: TWOGIS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: TWOGIS_API_KEY
+              optional: true
+        - name: EMBEDDING_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: EMBEDDING_MODEL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.poiService.resources | nindent 12 }}
         livenessProbe:

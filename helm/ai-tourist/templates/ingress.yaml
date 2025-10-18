@@ -2,7 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ai-tourist-ingress
+  name: {{ include "ai-tourist.fullname" . }}-ingress
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
@@ -14,14 +16,14 @@ spec:
         pathType: ImplementationSpecific
         backend:
           service:
-            name: {{ .Values.apiGateway.name }}
+            name: {{ include "ai-tourist.fullname" . }}-api-gateway
             port:
-              number: {{ .Values.apiGateway.port }}
+              number: {{ .Values.apiGateway.service.port }}
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: {{ .Values.frontend.name }}
+            name: {{ include "ai-tourist.fullname" . }}-frontend
             port:
-              number: {{ .Values.frontend.port }}
+              number: {{ .Values.frontend.service.port }}
 {{- end }}

@@ -3,20 +3,20 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-llm-service
   labels:
-    app: llm-service
+    app: {{ .Values.llmService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.llmService.replicaCount }}
+  replicas: {{ .Values.llmService.replicas }}
   selector:
     matchLabels:
-      app: llm-service
+      app: {{ .Values.llmService.name }}
   template:
     metadata:
       labels:
-        app: llm-service
+        app: {{ .Values.llmService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9094"
+        prometheus.io/port: "{{ .Values.llmService.metricsPort }}"
     spec:
       containers:
       - name: llm-service
@@ -26,12 +26,37 @@ spec:
         - name: grpc
           containerPort: {{ .Values.llmService.service.port }}
         - name: metrics
-          containerPort: 9094
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.llmService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.llmService.service.port }}"
+        - name: LLM_PROVIDER
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: LLM_PROVIDER
+        - name: LLM_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: LLM_MODEL
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: OPENAI_API_KEY
+              optional: true
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: ANTHROPIC_API_KEY
+              optional: true
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.llmService.resources | nindent 12 }}
         livenessProbe:

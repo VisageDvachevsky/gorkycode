@@ -3,20 +3,20 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-ranking-service
   labels:
-    app: ranking-service
+    app: {{ .Values.rankingService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.rankingService.replicaCount }}
+  replicas: {{ .Values.rankingService.replicas }}
   selector:
     matchLabels:
-      app: ranking-service
+      app: {{ .Values.rankingService.name }}
   template:
     metadata:
       labels:
-        app: ranking-service
+        app: {{ .Values.rankingService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9092"
+        prometheus.io/port: "{{ .Values.rankingService.metricsPort }}"
     spec:
       containers:
       - name: ranking-service
@@ -26,12 +26,20 @@ spec:
         - name: grpc
           containerPort: {{ .Values.rankingService.service.port }}
         - name: metrics
-          containerPort: 9092
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.rankingService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.rankingService.service.port }}"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DATABASE_URL
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.rankingService.resources | nindent 12 }}
         livenessProbe:

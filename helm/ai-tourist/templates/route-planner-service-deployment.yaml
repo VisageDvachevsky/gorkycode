@@ -3,20 +3,20 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-route-planner-service
   labels:
-    app: route-planner-service
+    app: {{ .Values.routePlannerService.name }}
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.routePlannerService.replicaCount }}
+  replicas: {{ .Values.routePlannerService.replicas }}
   selector:
     matchLabels:
-      app: route-planner-service
+      app: {{ .Values.routePlannerService.name }}
   template:
     metadata:
       labels:
-        app: route-planner-service
+        app: {{ .Values.routePlannerService.name }}
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9093"
+        prometheus.io/port: "{{ .Values.routePlannerService.metricsPort }}"
     spec:
       containers:
       - name: route-planner-service
@@ -26,12 +26,25 @@ spec:
         - name: grpc
           containerPort: {{ .Values.routePlannerService.service.port }}
         - name: metrics
-          containerPort: 9093
-        envFrom:
-        - configMapRef:
-            name: {{ include "ai-tourist.fullname" . }}-config
-        - secretRef:
-            name: {{ include "ai-tourist.fullname" . }}-secrets
+          containerPort: {{ .Values.routePlannerService.metricsPort }}
+        env:
+        - name: GRPC_PORT
+          value: "{{ .Values.routePlannerService.service.port }}"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: DATABASE_URL
+        - name: WALK_SPEED_KMH
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: WALK_SPEED_KMH
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-config
+              key: ENVIRONMENT
         resources:
           {{- toYaml .Values.routePlannerService.resources | nindent 12 }}
         livenessProbe:

@@ -1,0 +1,126 @@
+---
+# Frontend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-frontend
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.frontend.name }}
+---
+# Embedding Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-embedding-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: embedding-service
+spec:
+  type: {{ .Values.embeddingService.service.type }}
+  ports:
+    - port: {{ .Values.embeddingService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.embeddingService.name }}
+---
+# Ranking Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-ranking-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ranking-service
+spec:
+  type: {{ .Values.rankingService.service.type }}
+  ports:
+    - port: {{ .Values.rankingService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.rankingService.name }}
+---
+# Route Planner Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-route-planner-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: route-planner-service
+spec:
+  type: {{ .Values.routePlannerService.service.type }}
+  ports:
+    - port: {{ .Values.routePlannerService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.routePlannerService.name }}
+---
+# LLM Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-llm-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: llm-service
+spec:
+  type: {{ .Values.llmService.service.type }}
+  ports:
+    - port: {{ .Values.llmService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.llmService.name }}
+---
+# Geocoding Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-geocoding-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: geocoding-service
+spec:
+  type: {{ .Values.geocodingService.service.type }}
+  ports:
+    - port: {{ .Values.geocodingService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.geocodingService.name }}
+---
+# POI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-poi-service
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+    app.kubernetes.io/component: poi-service
+spec:
+  type: {{ .Values.poiService.service.type }}
+  ports:
+    - port: {{ .Values.poiService.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    app: {{ .Values.poiService.name }}
