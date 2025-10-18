@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 /frontend/node_modules
 .env.yaml
+helm/ai-tourist/values-dev.yaml
+helm/ai-tourist/values.yaml
+

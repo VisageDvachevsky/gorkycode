@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tpoi.proto\x12\x03poi\"=\n\x0eGetPOIsRequest\x12\x12\n\ncategories\x18\x01 \x03(\t\x12\x17\n\x0fwith_embeddings\x18\x02 \x01(\x08\")\n\x0fGetPOIsResponse\x12\x16\n\x04pois\x18\x01 \x03(\x0b\x32\x08.poi.POI\"\xd2\x01\n\x03POI\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x0c\n\x04tags\x18\x06 \x03(\t\x12\x13\n\x0b\x64\x65scription\x18\x07 \x01(\t\x12\x19\n\x11\x61vg_visit_minutes\x18\x08 \x01(\x05\x12\x0e\n\x06rating\x18\t \x01(\x01\x12\x11\n\tembedding\x18\n \x03(\x02\x12\x11\n\tlocal_tip\x18\x0b \x01(\t\x12\x11\n\tphoto_tip\x18\x0c \x01(\t\"S\n\x11\x43offeeShopRequest\x12\x0b\n\x03lat\x18\x01 \x01(\x01\x12\x0b\n\x03lon\x18\x02 \x01(\x01\x12\x15\n\rradius_meters\x18\x03 \x01(\x05\x12\r\n\x05limit\x18\x04 \x01(\x05\";\n\x12\x43offeeShopResponse\x12%\n\x0c\x63offee_shops\x18\x01 \x03(\x0b\x32\x0f.poi.CoffeeShop\"t\n\nCoffeeShop\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0b\n\x03lat\x18\x02 \x01(\x01\x12\x0b\n\x03lon\x18\x03 \x01(\x01\x12\x0e\n\x06rating\x18\x04 \x01(\x01\x12\x19\n\x11\x61vg_visit_minutes\x18\x05 \x01(\x05\x12\x13\n\x0b\x64\x65scription\x18\x06 \x01(\t\"t\n\x12\x43offeeBreakRequest\x12\x17\n\x05route\x18\x01 \x03(\x0b\x32\x08.poi.POI\x12\x18\n\x10interval_minutes\x18\x02 \x01(\x05\x12+\n\x0bpreferences\x18\x03 \x01(\x0b\x32\x16.poi.CoffeePreferences\"W\n\x11\x43offeePreferences\x12\x0f\n\x07\x65nabled\x18\x01 \x01(\x08\x12\x18\n\x10interval_minutes\x18\x02 \x01(\x05\x12\x17\n\x0fpreferred_types\x18\x03 \x03(\t\"6\n\x13\x43offeeBreakResponse\x12\x1f\n\rupdated_route\x18\x01 \x03(\x0b\x32\x08.poi.POI2\xd8\x01\n\nPOIService\x12\x37\n\nGetAllPOIs\x12\x13.poi.GetPOIsRequest\x1a\x14.poi.GetPOIsResponse\x12H\n\x15\x46indNearbyCoffeeShops\x12\x16.poi.CoffeeShopRequest\x1a\x17.poi.CoffeeShopResponse\x12G\n\x12InsertCoffeeBreaks\x12\x17.poi.CoffeeBreakRequest\x1a\x18.poi.CoffeeBreakResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\tpoi.proto\x12\x03poi\"=\n\x0eGetPOIsRequest\x12\x12\n\ncategories\x18\x01 \x03(\t\x12\x17\n\x0fwith_embeddings\x18\x02 \x01(\x08\")\n\x0fGetPOIsResponse\x12\x16\n\x04pois\x18\x01 \x03(\x0b\x32\x08.poi.POI\"\x16\n\x14GetCategoriesRequest\":\n\x15GetCategoriesResponse\x12!\n\ncategories\x18\x01 \x03(\x0b\x32\r.poi.Category\"7\n\x08\x43\x61tegory\x12\r\n\x05value\x18\x01 \x01(\t\x12\r\n\x05label\x18\x02 \x01(\t\x12\r\n\x05\x63ount\x18\x03 \x01(\x05\"@\n\x11\x43\x61\x66\x65SearchRequest\x12\x0b\n\x03lat\x18\x01 \x01(\x01\x12\x0b\n\x03lon\x18\x02 \x01(\x01\x12\x11\n\tradius_km\x18\x03 \x01(\x01\".\n\x12\x43\x61\x66\x65SearchResponse\x12\x18\n\x05\x63\x61\x66\x65s\x18\x01 \x03(\x0b\x32\t.poi.Cafe\"n\n\x04\x43\x61\x66\x65\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x0f\n\x07\x61\x64\x64ress\x18\x05 \x01(\t\x12\x0f\n\x07rubrics\x18\x06 \x03(\t\x12\x10\n\x08\x64istance\x18\x07 \x01(\x01\"\x91\x02\n\x03POI\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x0c\n\x04tags\x18\x06 \x03(\t\x12\x13\n\x0b\x64\x65scription\x18\x07 \x01(\t\x12\x19\n\x11\x61vg_visit_minutes\x18\x08 \x01(\x05\x12\x0e\n\x06rating\x18\t \x01(\x01\x12\x11\n\tembedding\x18\n \x03(\x02\x12\x11\n\tlocal_tip\x18\x0b \x01(\t\x12\x11\n\tphoto_tip\x18\x0c \x01(\t\x12\x0f\n\x07\x61\x64\x64ress\x18\r \x01(\t\x12\x13\n\x0bsocial_mode\x18\x0e \x01(\t\x12\x17\n\x0fintensity_level\x18\x0f \x01(\t2\xd7\x01\n\nPOIService\x12\x37\n\nGetAllPOIs\x12\x13.poi.GetPOIsRequest\x1a\x14.poi.GetPOIsResponse\x12\x46\n\rGetCategories\x12\x19.poi.GetCategoriesRequest\x1a\x1a.poi.GetCategoriesResponse\x12H\n\x15\x46indCafesNearLocation\x12\x16.poi.CafeSearchRequest\x1a\x17.poi.CafeSearchResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -25,20 +25,20 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_GETPOISREQUEST']._serialized_end=79
   _globals['_GETPOISRESPONSE']._serialized_start=81
   _globals['_GETPOISRESPONSE']._serialized_end=122
-  _globals['_POI']._serialized_start=125
-  _globals['_POI']._serialized_end=335
-  _globals['_COFFEESHOPREQUEST']._serialized_start=337
-  _globals['_COFFEESHOPREQUEST']._serialized_end=420
-  _globals['_COFFEESHOPRESPONSE']._serialized_start=422
-  _globals['_COFFEESHOPRESPONSE']._serialized_end=481
-  _globals['_COFFEESHOP']._serialized_start=483
-  _globals['_COFFEESHOP']._serialized_end=599
-  _globals['_COFFEEBREAKREQUEST']._serialized_start=601
-  _globals['_COFFEEBREAKREQUEST']._serialized_end=717
-  _globals['_COFFEEPREFERENCES']._serialized_start=719
-  _globals['_COFFEEPREFERENCES']._serialized_end=806
-  _globals['_COFFEEBREAKRESPONSE']._serialized_start=808
-  _globals['_COFFEEBREAKRESPONSE']._serialized_end=862
-  _globals['_POISERVICE']._serialized_start=865
-  _globals['_POISERVICE']._serialized_end=1081
+  _globals['_GETCATEGORIESREQUEST']._serialized_start=124
+  _globals['_GETCATEGORIESREQUEST']._serialized_end=146
+  _globals['_GETCATEGORIESRESPONSE']._serialized_start=148
+  _globals['_GETCATEGORIESRESPONSE']._serialized_end=206
+  _globals['_CATEGORY']._serialized_start=208
+  _globals['_CATEGORY']._serialized_end=263
+  _globals['_CAFESEARCHREQUEST']._serialized_start=265
+  _globals['_CAFESEARCHREQUEST']._serialized_end=329
+  _globals['_CAFESEARCHRESPONSE']._serialized_start=331
+  _globals['_CAFESEARCHRESPONSE']._serialized_end=377
+  _globals['_CAFE']._serialized_start=379
+  _globals['_CAFE']._serialized_end=489
+  _globals['_POI']._serialized_start=492
+  _globals['_POI']._serialized_end=765
+  _globals['_POISERVICE']._serialized_start=768
+  _globals['_POISERVICE']._serialized_end=983
 # @@protoc_insertion_point(module_scope)

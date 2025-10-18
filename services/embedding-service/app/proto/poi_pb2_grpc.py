@@ -19,15 +19,15 @@ class POIServiceStub(object):
                 request_serializer=poi__pb2.GetPOIsRequest.SerializeToString,
                 response_deserializer=poi__pb2.GetPOIsResponse.FromString,
                 )
-        self.FindNearbyCoffeeShops = channel.unary_unary(
-                '/poi.POIService/FindNearbyCoffeeShops',
-                request_serializer=poi__pb2.CoffeeShopRequest.SerializeToString,
-                response_deserializer=poi__pb2.CoffeeShopResponse.FromString,
+        self.GetCategories = channel.unary_unary(
+                '/poi.POIService/GetCategories',
+                request_serializer=poi__pb2.GetCategoriesRequest.SerializeToString,
+                response_deserializer=poi__pb2.GetCategoriesResponse.FromString,
                 )
-        self.InsertCoffeeBreaks = channel.unary_unary(
-                '/poi.POIService/InsertCoffeeBreaks',
-                request_serializer=poi__pb2.CoffeeBreakRequest.SerializeToString,
-                response_deserializer=poi__pb2.CoffeeBreakResponse.FromString,
+        self.FindCafesNearLocation = channel.unary_unary(
+                '/poi.POIService/FindCafesNearLocation',
+                request_serializer=poi__pb2.CafeSearchRequest.SerializeToString,
+                response_deserializer=poi__pb2.CafeSearchResponse.FromString,
                 )
 
 
@@ -35,19 +35,22 @@ class POIServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def GetAllPOIs(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Get all POIs with optional filtering
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def FindNearbyCoffeeShops(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def GetCategories(self, request, context):
+        """Get categories with counts
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def InsertCoffeeBreaks(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def FindCafesNearLocation(self, request, context):
+        """Find cafes near location
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -60,15 +63,15 @@ def add_POIServiceServicer_to_server(servicer, server):
                     request_deserializer=poi__pb2.GetPOIsRequest.FromString,
                     response_serializer=poi__pb2.GetPOIsResponse.SerializeToString,
             ),
-            'FindNearbyCoffeeShops': grpc.unary_unary_rpc_method_handler(
-                    servicer.FindNearbyCoffeeShops,
-                    request_deserializer=poi__pb2.CoffeeShopRequest.FromString,
-                    response_serializer=poi__pb2.CoffeeShopResponse.SerializeToString,
+            'GetCategories': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetCategories,
+                    request_deserializer=poi__pb2.GetCategoriesRequest.FromString,
+                    response_serializer=poi__pb2.GetCategoriesResponse.SerializeToString,
             ),
-            'InsertCoffeeBreaks': grpc.unary_unary_rpc_method_handler(
-                    servicer.InsertCoffeeBreaks,
-                    request_deserializer=poi__pb2.CoffeeBreakRequest.FromString,
-                    response_serializer=poi__pb2.CoffeeBreakResponse.SerializeToString,
+            'FindCafesNearLocation': grpc.unary_unary_rpc_method_handler(
+                    servicer.FindCafesNearLocation,
+                    request_deserializer=poi__pb2.CafeSearchRequest.FromString,
+                    response_serializer=poi__pb2.CafeSearchResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -98,7 +101,7 @@ class POIService(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def FindNearbyCoffeeShops(request,
+    def GetCategories(request,
             target,
             options=(),
             channel_credentials=None,
@@ -108,14 +111,14 @@ class POIService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/poi.POIService/FindNearbyCoffeeShops',
-            poi__pb2.CoffeeShopRequest.SerializeToString,
-            poi__pb2.CoffeeShopResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/poi.POIService/GetCategories',
+            poi__pb2.GetCategoriesRequest.SerializeToString,
+            poi__pb2.GetCategoriesResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def InsertCoffeeBreaks(request,
+    def FindCafesNearLocation(request,
             target,
             options=(),
             channel_credentials=None,
@@ -125,8 +128,8 @@ class POIService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/poi.POIService/InsertCoffeeBreaks',
-            poi__pb2.CoffeeBreakRequest.SerializeToString,
-            poi__pb2.CoffeeBreakResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/poi.POIService/FindCafesNearLocation',
+            poi__pb2.CafeSearchRequest.SerializeToString,
+            poi__pb2.CafeSearchResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

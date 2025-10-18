@@ -1,208 +1,340 @@
-.PHONY: help k8s-install k8s-deploy k8s-stop k8s-clean k8s-rebuild k8s-status k8s-logs k8s-open k8s-load-pois dev-setup proto-gen docker-build-all grafana jaeger
+.PHONY: help
 
-CLUSTER_NAME := ai-tourist-cluster
+# ============================================
+# AI-Tourist Professional Makefile (Helm Edition)
+# ============================================
+
+CHART_PATH := helm/ai-tourist
+RELEASE_NAME := ai-tourist
 NAMESPACE := ai-tourist
-HELM_RELEASE := ai-tourist
+VALUES_FILE := $(CHART_PATH)/values.yaml
+VALUES_DEV := $(CHART_PATH)/values-dev.yaml
+VALUES_PROD := $(CHART_PATH)/values-prod.yaml
 
 help:
-	@echo "🎯 AI-Tourist Kubernetes Commands"
+	@echo "═══════════════════════════════════════════════════════"
+	@echo "  AI-Tourist Gorkycode - Professional Helm Commands"
+	@echo "═══════════════════════════════════════════════════════"
 	@echo ""
-	@echo "Quick Start (for hackathon judges):"
-	@echo "  make k8s-install    - Install minikube + dependencies (one-time)"
-	@echo "  make k8s-deploy     - Deploy entire project to K8s"
-	@echo "  make k8s-open       - Open application in browser"
+	@echo "📦 MONOLITH (Docker Compose):"
+	@echo "  make dev-up          - Start monolith in dev mode"
+	@echo "  make dev-down        - Stop monolith"
+	@echo "  make dev-logs        - View monolith logs"
+	@echo "  make dev-load-pois   - Load POI data in monolith"
 	@echo ""
-	@echo "Development:"
-	@echo "  make dev-setup      - Install dev dependencies"
-	@echo "  make proto-gen      - Generate gRPC code from .proto files"
-	@echo "  make docker-build   - Build all Docker images"
-	@echo "  make k8s-rebuild    - Rebuild images and redeploy"
+	@echo "☸️  KUBERNETES (Helm):"
+	@echo "  make helm-install    - Install with Helm"
+	@echo "  make helm-upgrade    - Upgrade release"
+	@echo "  make helm-uninstall  - Uninstall release"
+	@echo "  make helm-status     - Check deployment status"
+	@echo "  make helm-logs       - View pod logs"
+	@echo "  make helm-test       - Run Helm tests"
 	@echo ""
-	@echo "Kubernetes Management:"
-	@echo "  make k8s-status     - Check cluster status"
-	@echo "  make k8s-logs       - Show all service logs"
-	@echo "  make k8s-load-pois  - Load POI data to database"
-	@echo "  make k8s-stop       - Stop all services"
-	@echo "  make k8s-clean      - Delete cluster"
+	@echo "🏗️  BUILD & PUSH:"
+	@echo "  make docker-build    - Build all images"
+	@echo "  make docker-push     - Push images to registry"
 	@echo ""
-	@echo "Observability:"
-	@echo "  make grafana        - Open Grafana dashboard"
-	@echo "  make jaeger         - Open Jaeger UI"
+	@echo "🔧 DEVELOPMENT:"
+	@echo "  make generate-protos - Generate gRPC code"
+	@echo "  make gen-poi-cm      - Generate POI ConfigMap"
+	@echo "  make format          - Format code"
+	@echo "  make lint            - Lint code"
+	@echo "  make test            - Run tests"
 	@echo ""
+	@echo "🐛 DEBUGGING:"
+	@echo "  make debug-pod       - Shell into a pod"
+	@echo "  make port-forward    - Forward API Gateway port"
+	@echo "  make describe        - Describe all resources"
+	@echo ""
+	@echo "📊 MONITORING:"
+	@echo "  make metrics         - View Prometheus metrics"
+	@echo "  make grafana         - Open Grafana dashboard"
 
-k8s-install:
-	@echo "🚀 Installing Kubernetes dependencies..."
-	@command -v minikube >/dev/null 2>&1 || { echo "Installing minikube..."; \
-		curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64; \
-		sudo install minikube-linux-amd64 /usr/local/bin/minikube; \
-		rm minikube-linux-amd64; }
-	@command -v kubectl >/dev/null 2>&1 || { echo "Installing kubectl..."; \
-		curl -LO "https://dl.k8s.io/release/$$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"; \
-		sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl; \
-		rm kubectl; }
-	@command -v helm >/dev/null 2>&1 || { echo "Installing helm..."; \
-		curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash; }
-	@echo "✅ Dependencies installed!"
-	@echo "Starting minikube cluster..."
-	minikube start --cpus=4 --memory=8192 --driver=docker --profile=$(CLUSTER_NAME)
-	minikube profile $(CLUSTER_NAME)
-	minikube addons enable ingress
-	minikube addons enable metrics-server
-	@echo "✅ Minikube cluster ready!"
+# ============================================
+# MONOLITH (Docker Compose)
+# ============================================
 
-k8s-deploy: proto-gen docker-build-all
-	@echo "🚢 Deploying AI-Tourist to Kubernetes..."
-	@if [ ! -f .env.yaml ]; then \
-		echo "⚠️  .env.yaml not found. Creating from .env.example..."; \
-		if [ -f .env ]; then \
-			./scripts/env-to-yaml.sh; \
-		else \
-			cp .env.example .env; \
-			./scripts/env-to-yaml.sh; \
-		fi \
-	fi
-	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-	kubectl config set-context --current --namespace=$(NAMESPACE)
-	helm upgrade --install $(HELM_RELEASE) ./helm/ai-tourist \
+dev-up:
+	@echo "🚀 Starting monolith in development mode..."
+	docker compose up -d
+	@echo ""
+	@echo "✅ Monolith started!"
+	@echo "   Frontend: http://localhost:5173"
+	@echo "   API: http://localhost:8001"
+	@echo ""
+	@echo "⚠️  Don't forget to run: make dev-load-pois"
+
+dev-down:
+	docker compose down
+
+dev-logs:
+	docker compose logs -f
+
+dev-logs-api:
+	docker compose logs -f backend
+
+dev-load-pois:
+	@echo "📂 Loading POI data into monolith..."
+	docker compose exec backend poetry run python scripts/load_pois.py
+	@echo "✅ POI data loaded!"
+
+dev-rebuild:
+	docker compose down
+	docker compose build --no-cache
+	docker compose up -d
+
+dev-clean:
+	docker compose down -v
+	docker system prune -f
+
+# ============================================
+# HELM DEPLOYMENT
+# ============================================
+
+helm-deps:
+	@echo "📦 Installing Helm dependencies..."
+	helm dependency update $(CHART_PATH)
+
+helm-lint:
+	@echo "🔍 Linting Helm chart..."
+	helm lint $(CHART_PATH)
+
+helm-template:
+	@echo "🎨 Rendering Helm templates..."
+	helm template $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
+		--values $(VALUES_FILE)
+
+helm-install: helm-deps helm-lint gen-poi-cm
+	@echo "🚀 Installing AI-Tourist with Helm..."
+	@if ! kubectl get namespace $(NAMESPACE) >/dev/null 2>&1; then \
+		kubectl create namespace $(NAMESPACE); \
+		echo "✓ Created namespace: $(NAMESPACE)"; \
+	fi
+	@echo ""
+	@echo "⚙️  Deploying with Helm..."
+	helm upgrade --install $(RELEASE_NAME) $(CHART_PATH) \
+		--namespace $(NAMESPACE) \
+		--values $(VALUES_FILE) \
 		--create-namespace \
 		--wait \
-		--timeout 10m \
-		-f .env.yaml
+		--timeout 10m
 	@echo ""
 	@echo "✅ Deployment complete!"
 	@echo ""
-	@echo "📊 Service Status:"
-	@kubectl get pods -n $(NAMESPACE)
-	@echo ""
-	@echo "🌐 Access URLs:"
-	@MINIKUBE_IP=$$(minikube ip --profile=$(CLUSTER_NAME)); \
-	echo "  Frontend:  http://$$MINIKUBE_IP"; \
-	echo "  API:       http://$$MINIKUBE_IP/api"; \
-	echo "  Grafana:   http://$$MINIKUBE_IP:3000 (admin/admin)"; \
-	echo "  Jaeger:    http://$$MINIKUBE_IP:16686"
-	@echo ""
-	@echo "💡 Run 'make k8s-open' to open in browser"
+	@$(MAKE) helm-status
 
-k8s-rebuild:
-	@echo "🔄 Rebuilding and redeploying..."
-	@make docker-build-all
-	@kubectl rollout restart deployment -n $(NAMESPACE) 2>/dev/null || true
-	@helm upgrade $(HELM_RELEASE) ./helm/ai-tourist \
+helm-upgrade: gen-poi-cm
+	@echo "⬆️  Upgrading AI-Tourist release..."
+	helm upgrade $(RELEASE_NAME) $(CHART_PATH) \
 		--namespace $(NAMESPACE) \
-		--reuse-values \
+		--values $(VALUES_FILE) \
 		--wait \
-		--timeout 5m
-	@echo "✅ Rebuild and redeploy complete"
-	@make k8s-status
-
-k8s-open:
-	@echo "🌐 Opening application..."
-	@MINIKUBE_IP=$$(minikube ip --profile=$(CLUSTER_NAME)); \
-	echo "Frontend: http://$$MINIKUBE_IP"; \
-	xdg-open http://$$MINIKUBE_IP 2>/dev/null || \
-	open http://$$MINIKUBE_IP 2>/dev/null || \
-	echo "Open http://$$MINIKUBE_IP in your browser"
-
-k8s-status:
-	@echo "📊 Cluster Status:"
-	@kubectl get nodes
+		--timeout 10m
 	@echo ""
-	@echo "📦 Pods:"
-	@kubectl get pods -n $(NAMESPACE)
-	@echo ""
-	@echo "🌐 Services:"
-	@kubectl get svc -n $(NAMESPACE)
-	@echo ""
-	@echo "🔗 Ingress:"
-	@kubectl get ingress -n $(NAMESPACE)
+	@echo "✅ Upgrade complete!"
 
-k8s-logs:
-	@echo "📋 Streaming logs from all services..."
-	@kubectl logs -f -n $(NAMESPACE) -l app.kubernetes.io/instance=$(HELM_RELEASE) --all-containers=true --tail=100 2>/dev/null || \
-	kubectl logs -n $(NAMESPACE) --all-containers=true --tail=100 -l app
+helm-uninstall:
+	@echo "🗑️  Uninstalling AI-Tourist..."
+	helm uninstall $(RELEASE_NAME) --namespace $(NAMESPACE)
+	@read -p "Delete namespace $(NAMESPACE)? [y/N] " confirm; \
+	if [ "$$confirm" = "y" ]; then \
+		kubectl delete namespace $(NAMESPACE); \
+		echo "✓ Namespace deleted"; \
+	fi
 
-k8s-load-pois:
-	@echo "📦 Loading POIs to Kubernetes database..."
-	@if [ -f scripts/load-pois-to-k8s.sh ]; then \
-		bash scripts/load-pois-to-k8s.sh; \
+helm-status:
+	@echo "📊 Deployment Status:"
+	@echo ""
+	@echo "═══ Helm Release ═══"
+	helm status $(RELEASE_NAME) --namespace $(NAMESPACE)
+	@echo ""
+	@echo "═══ Pods ═══"
+	kubectl get pods -n $(NAMESPACE) -o wide
+	@echo ""
+	@echo "═══ Services ═══"
+	kubectl get services -n $(NAMESPACE)
+	@echo ""
+	@echo "═══ Jobs ═══"
+	kubectl get jobs -n $(NAMESPACE)
+
+helm-logs:
+	@echo "📋 Pod Logs:"
+	@read -p "Enter pod name (or press Enter for all): " pod; \
+	if [ -z "$$pod" ]; then \
+		kubectl logs -n $(NAMESPACE) --all-containers=true --tail=100 -l app.kubernetes.io/instance=$(RELEASE_NAME); \
 	else \
-		echo "⚠️  POI loader script not found, running manual job..."; \
-		kubectl create job --from=cronjob/poi-loader manual-poi-load-$$(date +%s) -n $(NAMESPACE) 2>/dev/null || \
-		echo "✓ POIs loaded via init container"; \
+		kubectl logs -n $(NAMESPACE) $$pod --tail=100 -f; \
 	fi
 
-k8s-stop:
-	@echo "🛑 Stopping all services..."
-	helm uninstall $(HELM_RELEASE) -n $(NAMESPACE) || true
-	@echo "✅ Services stopped"
+helm-test:
+	@echo "🧪 Running Helm tests..."
+	helm test $(RELEASE_NAME) --namespace $(NAMESPACE)
 
-k8s-clean:
-	@echo "🗑️  Deleting cluster..."
-	minikube delete --profile=$(CLUSTER_NAME)
-	@echo "✅ Cluster deleted"
+# ============================================
+# DOCKER BUILD & PUSH
+# ============================================
 
-dev-setup:
-	@echo "🛠️  Setting up development environment..."
-	@command -v poetry >/dev/null 2>&1 || pip install poetry
-	@command -v grpcio-tools >/dev/null 2>&1 || pip install grpcio grpcio-tools
-	@for service in services/*/; do \
-		if [ -f "$$service/pyproject.toml" ]; then \
-			echo "Installing dependencies for $$service"; \
-			cd $$service && poetry install && cd ../..; \
-		fi \
-	done
-	@if [ -d frontend ]; then \
-		echo "Installing frontend dependencies..."; \
-		cd frontend && npm install; \
-	fi
-	@echo "✅ Dev environment ready"
+REGISTRY ?= ghcr.io/your-org
+TAG ?= latest
 
-proto-gen:
+docker-build:
+	@echo "🏗️  Building all Docker images..."
+	@echo ""
+	docker build -t $(REGISTRY)/ai-tourist-api-gateway:$(TAG) -f services/api-gateway/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-embedding-service:$(TAG) -f services/embedding-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-ranking-service:$(TAG) -f services/ranking-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-route-planner-service:$(TAG) -f services/route-planner-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-llm-service:$(TAG) -f services/llm-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-geocoding-service:$(TAG) -f services/geocoding-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-poi-service:$(TAG) -f services/poi-service/Dockerfile .
+	docker build -t $(REGISTRY)/ai-tourist-frontend:$(TAG) -f frontend/Dockerfile .
+	@echo ""
+	@echo "✅ All images built!"
+
+docker-push:
+	@echo "📤 Pushing images to registry..."
+	docker push $(REGISTRY)/ai-tourist-api-gateway:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-embedding-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-ranking-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-route-planner-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-llm-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-geocoding-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-poi-service:$(TAG)
+	docker push $(REGISTRY)/ai-tourist-frontend:$(TAG)
+	@echo "✅ All images pushed!"
+
+docker-build-poi:
+	@echo "🏗️  Building POI service..."
+	docker build -t $(REGISTRY)/ai-tourist-poi-service:$(TAG) -f services/poi-service/Dockerfile .
+	@echo "✅ POI service built!"
+
+# ============================================
+# DEVELOPMENT TOOLS
+# ============================================
+
+generate-protos:
 	@echo "🔧 Generating gRPC code from proto files..."
-	@if [ -f scripts/generate-protos.sh ]; then \
-		bash scripts/generate-protos.sh; \
-	else \
-		echo "Generating proto files manually..."; \
-		for proto_dir in services/*/proto; do \
-			if [ -d "$$proto_dir" ]; then \
-				service_dir=$$(dirname $$proto_dir); \
-				echo "Generating for $$service_dir"; \
-				python -m grpc_tools.protoc \
-					-I$$proto_dir \
-					--python_out=$$service_dir/app \
-					--grpc_python_out=$$service_dir/app \
-					--pyi_out=$$service_dir/app \
-					$$proto_dir/*.proto 2>/dev/null || true; \
-			fi \
-		done; \
-	fi
-	@echo "✅ Proto generation complete"
+	./scripts/generate-protos.sh
+	@echo "✅ Proto generation complete!"
 
-docker-build-all:
-	@echo "🐳 Building all Docker images..."
-	@eval $(minikube docker-env --profile=$(CLUSTER_NAME)) && \
-	echo "✓ Using minikube Docker daemon" && \
-	docker build -t ai-tourist-api-gateway:latest ./services/api-gateway && \
-	docker build -t ai-tourist-embedding-service:latest ./services/embedding-service && \
-	docker build -t ai-tourist-ranking-service:latest ./services/ranking-service && \
-	docker build -t ai-tourist-route-planner-service:latest ./services/route-planner-service && \
-	docker build -t ai-tourist-llm-service:latest ./services/llm-service && \
-	docker build -t ai-tourist-geocoding-service:latest ./services/geocoding-service && \
-	docker build -t ai-tourist-poi-service:latest ./services/poi-service && \
-	docker build -t ai-tourist-frontend:latest --target production ./frontend
-	@echo "✅ All images built"
+gen-poi-cm:
+	@echo "📝 Generating POI data ConfigMap..."
+	@if [ ! -f ./scripts/generate-poi-configmap.sh ]; then \
+		echo "❌ Error: scripts/generate-poi-configmap.sh not found"; \
+		exit 1; \
+	fi
+	chmod +x ./scripts/generate-poi-configmap.sh
+	./scripts/generate-poi-configmap.sh
+	@echo "✅ POI ConfigMap generated!"
+
+format:
+	@echo "🎨 Formatting Python code..."
+	cd backend && poetry run black app/ || true
+	cd backend && poetry run isort app/ || true
+	@echo "✅ Code formatted!"
+
+lint:
+	@echo "🔍 Linting code..."
+	cd backend && poetry run flake8 app/ || true
+	cd backend && poetry run mypy app/ || true
+
+test:
+	@echo "🧪 Running tests..."
+	cd backend && poetry run pytest -v
+
+test-cov:
+	@echo "🧪 Running tests with coverage..."
+	cd backend && poetry run pytest --cov=app --cov-report=html
+
+# ============================================
+# DEBUGGING
+# ============================================
+
+debug-pod:
+	@echo "🐚 Available pods:"
+	@kubectl get pods -n $(NAMESPACE) | grep Running
+	@echo ""
+	@read -p "Enter pod name: " pod; \
+	kubectl exec -it -n $(NAMESPACE) $$pod -- /bin/bash || \
+	kubectl exec -it -n $(NAMESPACE) $$pod -- /bin/sh
+
+port-forward:
+	@echo "🔌 Setting up port forwarding..."
+	@echo "   API Gateway will be available at http://localhost:8000"
+	@API_POD=$$(kubectl get pods -n $(NAMESPACE) -l app.kubernetes.io/name=api-gateway -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); \
+	if [ -z "$$API_POD" ]; then \
+		echo "❌ Error: API Gateway pod not found"; \
+		exit 1; \
+	fi; \
+	echo "   Pod: $$API_POD"; \
+	kubectl port-forward -n $(NAMESPACE) $$API_POD 8000:8000
+
+describe:
+	@echo "📝 Describing all resources..."
+	kubectl describe all -n $(NAMESPACE)
+
+top:
+	@echo "📊 Resource usage:"
+	kubectl top pods -n $(NAMESPACE)
+	kubectl top nodes
+
+# ============================================
+# MONITORING
+# ============================================
+
+metrics:
+	@echo "📊 Opening Prometheus..."
+	@kubectl port-forward -n monitoring svc/prometheus 9090:9090 &
+	@sleep 2
+	@echo "✓ Prometheus available at http://localhost:9090"
 
 grafana:
-	@echo "📊 Opening Grafana..."
-	@MINIKUBE_IP=$$(minikube ip --profile=$(CLUSTER_NAME)); \
-	xdg-open http://$$MINIKUBE_IP:3000 2>/dev/null || \
-	open http://$$MINIKUBE_IP:3000 2>/dev/null || \
-	echo "Open http://$$MINIKUBE_IP:3000 (admin/admin)"
+	@echo "📈 Opening Grafana..."
+	@kubectl port-forward -n monitoring svc/grafana 3000:3000 &
+	@sleep 2
+	@echo "✓ Grafana available at http://localhost:3000"
+	@echo "   Default credentials: admin/admin"
 
-jaeger:
-	@echo "🔍 Opening Jaeger..."
-	@MINIKUBE_IP=$$(minikube ip --profile=$(CLUSTER_NAME)); \
-	xdg-open http://$$MINIKUBE_IP:16686 2>/dev/null || \
-	open http://$$MINIKUBE_IP:16686 2>/dev/null || \
-	echo "Open http://$$MINIKUBE_IP:16686"
+# ============================================
+# DATABASE OPERATIONS
+# ============================================
+
+db-shell:
+	@echo "🗄️  Connecting to PostgreSQL..."
+	@POD=$$(kubectl get pods -n $(NAMESPACE) -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}'); \
+	kubectl exec -it -n $(NAMESPACE) $$POD -- psql -U gorkycode -d gorkycode
+
+db-backup:
+	@echo "💾 Creating database backup..."
+	@POD=$$(kubectl get pods -n $(NAMESPACE) -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}'); \
+	kubectl exec -n $(NAMESPACE) $$POD -- pg_dump -U gorkycode gorkycode > backup_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "✅ Backup created!"
+
+# ============================================
+# CLEANUP
+# ============================================
+
+clean-all: helm-uninstall
+	@echo "🧹 Cleaning up everything..."
+	docker compose down -v
+	docker system prune -af
+	@echo "✅ Cleanup complete!"
+
+# ============================================
+# CI/CD HELPERS
+# ============================================
+
+ci-install:
+	poetry install
+	cd frontend && npm ci
+
+ci-test:
+	@$(MAKE) lint
+	@$(MAKE) test
+
+ci-build:
+	@$(MAKE) docker-build
+
+ci-deploy:
+	@$(MAKE) helm-upgrade

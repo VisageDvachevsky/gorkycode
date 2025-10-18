@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 import httpx
 
@@ -61,120 +61,178 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                         tags=poi.tags or [],
                         description=poi.description or "",
                         avg_visit_minutes=poi.avg_visit_minutes,
-                        rating=poi.rating or 0.0,
-                        embedding=poi.embedding if request.with_embeddings else [],
+                        rating=poi.rating,
+                        embedding=poi.embedding or [] if request.with_embeddings else [],
                         local_tip=poi.local_tip or "",
-                        photo_tip=poi.photo_tip or ""
+                        photo_tip=poi.photo_tip or "",
+                        address=poi.address or "",
+                        social_mode=poi.social_mode or "any",
+                        intensity_level=poi.intensity_level or "medium"
                     )
                     for poi in pois
                 ]
                 
-                logger.info(f"Retrieved {len(response_pois)} POIs")
-                
+                logger.info(f"✓ Retrieved {len(response_pois)} POIs")
                 return poi_pb2.GetPOIsResponse(pois=response_pois)
                 
         except Exception as e:
-            logger.error(f"Failed to get POIs: {e}")
+            logger.error(f"Error fetching POIs: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Failed to get POIs: {str(e)}")
+            context.set_details(f"Database error: {str(e)}")
             return poi_pb2.GetPOIsResponse()
     
-    async def FindNearbyCoffeeShops(
+    async def GetCategories(
         self,
-        request: poi_pb2.CoffeeShopRequest,
+        request: poi_pb2.GetCategoriesRequest,
         context
-    ) -> poi_pb2.CoffeeShopResponse:
-        """Find nearby coffee shops using 2GIS API"""
+    ) -> poi_pb2.GetCategoriesResponse:
+        """Get all categories with POI counts"""
         try:
-            async with httpx.AsyncClient() as client:
-                params = {
-                    "q": "кофейня",
-                    "point": f"{request.lon},{request.lat}",
-                    "radius": request.radius_meters,
-                    "limit": request.limit,
-                    "key": self.twogis_api_key
-                }
+            async with self.session_maker() as session:
+                stmt = select(
+                    POIModel.category,
+                    func.count(POIModel.id).label('count')
+                ).group_by(POIModel.category).order_by(func.count(POIModel.id).desc())
                 
-                response = await client.get(
-                    "https://catalog.api.2gis.com/3.0/items",
-                    params=params,
-                    timeout=10.0
+                result = await session.execute(stmt)
+                rows = result.all()
+                
+                categories = [
+                    poi_pb2.Category(
+                        value=row.category,
+                        label=row.category.replace('_', ' ').title(),
+                        count=row.count
+                    )
+                    for row in rows
+                ]
+                
+                logger.info(f"✓ Retrieved {len(categories)} categories")
+                return poi_pb2.GetCategoriesResponse(categories=categories)
+                
+        except Exception as e:
+            logger.error(f"Error fetching categories: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Database error: {str(e)}")
+            return poi_pb2.GetCategoriesResponse()
+    
+    async def FindCafesNearLocation(
+        self,
+        request: poi_pb2.CafeSearchRequest,
+        context
+    ) -> poi_pb2.CafeSearchResponse:
+        """Find cafes near location using 2GIS API"""
+        try:
+            # First try 2GIS API
+            if self.twogis_api_key:
+                cafes = await self._search_2gis_cafes(
+                    lat=request.lat,
+                    lon=request.lon,
+                    radius_km=request.radius_km
                 )
                 
-                coffee_shops = []
+                if cafes:
+                    return poi_pb2.CafeSearchResponse(cafes=cafes)
+            
+            # Fallback to database
+            async with self.session_maker() as session:
+                stmt = select(POIModel).where(POIModel.category == "cafe")
+                result = await session.execute(stmt)
+                db_cafes = result.scalars().all()
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    for item in data.get("result", {}).get("items", [])[:request.limit]:
-                        point = item.get("point", {})
-                        coffee_shops.append(
-                            poi_pb2.CoffeeShop(
-                                name=item.get("name", "Кофейня"),
-                                lat=point.get("lat", 0.0),
-                                lon=point.get("lon", 0.0),
-                                rating=float(item.get("reviews", {}).get("rating", 0.0)),
-                                avg_visit_minutes=20,
-                                description=item.get("address_name", "")
+                nearby_cafes = []
+                for cafe in db_cafes:
+                    distance = self._calculate_distance(
+                        request.lat, request.lon,
+                        cafe.lat, cafe.lon
+                    )
+                    
+                    if distance <= request.radius_km:
+                        nearby_cafes.append(
+                            poi_pb2.Cafe(
+                                id=str(cafe.id),
+                                name=cafe.name,
+                                lat=cafe.lat,
+                                lon=cafe.lon,
+                                address=cafe.address or "",
+                                rubrics=cafe.tags[:3] if cafe.tags else [],
+                                distance=distance
                             )
                         )
                 
-                logger.info(f"Found {len(coffee_shops)} coffee shops")
+                nearby_cafes.sort(key=lambda x: x.distance)
+                logger.info(f"✓ Found {len(nearby_cafes)} cafes from database")
                 
-                return poi_pb2.CoffeeShopResponse(coffee_shops=coffee_shops)
+                return poi_pb2.CafeSearchResponse(cafes=nearby_cafes[:10])
                 
         except Exception as e:
-            logger.error(f"Coffee shop search failed: {e}")
-            return poi_pb2.CoffeeShopResponse(coffee_shops=[])
+            logger.error(f"Error finding cafes: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Cafe search error: {str(e)}")
+            return poi_pb2.CafeSearchResponse()
     
-    async def InsertCoffeeBreaks(
+    async def _search_2gis_cafes(
         self,
-        request: poi_pb2.CoffeeBreakRequest,
-        context
-    ) -> poi_pb2.CoffeeBreakResponse:
-        """Insert coffee breaks into route"""
+        lat: float,
+        lon: float,
+        radius_km: float
+    ) -> List[poi_pb2.Cafe]:
+        """Search cafes using 2GIS Places API"""
         try:
-            if not request.preferences.enabled:
-                return poi_pb2.CoffeeBreakResponse(updated_route=list(request.route))
-            
-            updated_route = []
-            accumulated_minutes = 0
-            interval = request.preferences.interval_minutes
-            
-            for poi in request.route:
-                updated_route.append(poi)
-                accumulated_minutes += poi.avg_visit_minutes
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    "https://catalog.api.2gis.com/3.0/items",
+                    params={
+                        "q": "кафе",
+                        "point": f"{lon},{lat}",
+                        "radius": int(radius_km * 1000),
+                        "fields": "items.point,items.address,items.rubrics,items.schedule",
+                        "key": self.twogis_api_key
+                    }
+                )
                 
-                if accumulated_minutes >= interval:
-                    coffee_response = await self.FindNearbyCoffeeShops(
-                        poi_pb2.CoffeeShopRequest(
-                            lat=poi.lat,
-                            lon=poi.lon,
-                            radius_meters=500,
-                            limit=1
-                        ),
-                        context
-                    )
+                if response.status_code == 200:
+                    data = response.json()
                     
-                    if coffee_response.coffee_shops:
-                        coffee = coffee_response.coffee_shops[0]
-                        coffee_poi = poi_pb2.POI(
-                            id=999999,
-                            name=coffee.name,
-                            lat=coffee.lat,
-                            lon=coffee.lon,
-                            category="кофейня",
-                            tags=["coffee"],
-                            description=coffee.description,
-                            avg_visit_minutes=coffee.avg_visit_minutes,
-                            rating=coffee.rating
+                    cafes = []
+                    for item in data.get("result", {}).get("items", []):
+                        if "point" not in item:
+                            continue
+                        
+                        point = item["point"]
+                        distance = self._calculate_distance(
+                            lat, lon,
+                            point["lat"], point["lon"]
                         )
-                        updated_route.append(coffee_poi)
-                        accumulated_minutes = 0
-            
-            logger.info(f"Inserted coffee breaks, route now has {len(updated_route)} POIs")
-            
-            return poi_pb2.CoffeeBreakResponse(updated_route=updated_route)
-            
+                        
+                        cafes.append(
+                            poi_pb2.Cafe(
+                                id=item.get("id", ""),
+                                name=item.get("name", ""),
+                                lat=point["lat"],
+                                lon=point["lon"],
+                                address=item.get("address", {}).get("name", ""),
+                                rubrics=[r.get("name", "") for r in item.get("rubrics", [])[:3]],
+                                distance=distance
+                            )
+                        )
+                    
+                    logger.info(f"✓ Found {len(cafes)} cafes from 2GIS")
+                    return sorted(cafes, key=lambda x: x.distance)[:10]
+                
         except Exception as e:
-            logger.error(f"Coffee break insertion failed: {e}")
-            return poi_pb2.CoffeeBreakResponse(updated_route=list(request.route))
+            logger.warning(f"2GIS API error: {e}")
+        
+        return []
+    
+    def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate distance in km using Haversine formula"""
+        from math import radians, cos, sin, asin, sqrt
+        
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+        
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        c = 2 * asin(sqrt(a))
+        
+        return c * 6371  # Earth radius in km
