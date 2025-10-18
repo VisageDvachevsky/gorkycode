@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-llm-service
   labels:
-    app: {{ .Values.llmService.name }}
+    app: llm-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.llmService.replicas }}
+  replicas: {{ .Values.llmService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.llmService.name }}
+      app: llm-service
   template:
     metadata:
       labels:
-        app: {{ .Values.llmService.name }}
+        app: llm-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9094"
     spec:
       containers:
       - name: llm-service
-        image: "{{ .Values.llmService.image }}:{{ .Values.llmService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.llmService.image.repository }}:{{ .Values.llmService.image.tag }}"
+        imagePullPolicy: {{ .Values.llmService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.llmService.service.port }}

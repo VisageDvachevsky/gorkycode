@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-embedding-service
   labels:
-    app: {{ .Values.embeddingService.name }}
+    app: embedding-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.embeddingService.replicas }}
+  replicas: {{ .Values.embeddingService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.embeddingService.name }}
+      app: embedding-service
   template:
     metadata:
       labels:
-        app: {{ .Values.embeddingService.name }}
+        app: embedding-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9091"
     spec:
       containers:
       - name: embedding-service
-        image: "{{ .Values.embeddingService.image }}:{{ .Values.embeddingService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.embeddingService.image.repository }}:{{ .Values.embeddingService.image.tag }}"
+        imagePullPolicy: {{ .Values.embeddingService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.embeddingService.service.port }}

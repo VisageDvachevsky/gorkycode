@@ -338,3 +338,104 @@ ci-build:
 
 ci-deploy:
 	@$(MAKE) helm-upgrade
+
+# ============================================
+# Helm Configuration with TAG support
+# ============================================
+
+# Determine values file based on TAG
+ifeq ($(TAG),dev)
+    HELM_VALUES_FILE := helm/ai-tourist/values-dev.yaml
+else ifeq ($(TAG),prod)
+    HELM_VALUES_FILE := helm/ai-tourist/values.yaml
+else
+    # Default to dev
+    HELM_VALUES_FILE := helm/ai-tourist/values-dev.yaml
+endif
+
+# Helm targets
+
+# ============================================
+# Helm Configuration with TAG support
+# ============================================
+
+# Determine values file based on TAG
+ifeq ($(TAG),dev)
+    HELM_VALUES_FILE := helm/ai-tourist/values-dev.yaml
+else ifeq ($(TAG),prod)
+    HELM_VALUES_FILE := helm/ai-tourist/values.yaml
+else
+    # Default to dev
+    HELM_VALUES_FILE := helm/ai-tourist/values-dev.yaml
+endif
+
+# Helm targets
+.PHONY: helm-dependency-update
+helm-dependency-update:
+	@echo "📦 Installing Helm dependencies..."
+	helm dependency update helm/ai-tourist
+
+.PHONY: helm-lint
+helm-lint: helm-dependency-update
+	@echo "🔍 Linting Helm chart..."
+	helm lint helm/ai-tourist -f $(HELM_VALUES_FILE)
+
+.PHONY: helm-template
+helm-template: helm-dependency-update
+	@echo "🔧 Rendering Helm templates..."
+	helm template ai-tourist helm/ai-tourist -f $(HELM_VALUES_FILE)
+
+.PHONY: generate-poi-configmap
+generate-poi-configmap:
+	@echo "📝 Generating POI data ConfigMap..."
+	@chmod +x ./scripts/generate-poi-configmap.sh
+	@./scripts/generate-poi-configmap.sh
+	@echo "✅ POI ConfigMap generated!"
+
+.PHONY: helm-install
+helm-install: helm-dependency-update helm-lint generate-poi-configmap
+	@echo "🚀 Installing AI-Tourist with Helm..."
+	@echo "   Using values: $(HELM_VALUES_FILE)"
+	@if [ ! -d "$(shell kubectl config view --minify -o jsonpath='{..namespace}' 2>/dev/null)" ]; then \
+		kubectl create namespace ai-tourist || true; \
+		echo "✓ Created namespace: ai-tourist"; \
+	fi
+	@echo "⚙️  Deploying with Helm..."
+	helm upgrade --install ai-tourist helm/ai-tourist \
+		--namespace ai-tourist \
+		--values $(HELM_VALUES_FILE) \
+		--create-namespace \
+		--wait \
+		--timeout 10m
+
+.PHONY: helm-upgrade
+helm-upgrade: helm-dependency-update helm-lint generate-poi-configmap
+	@echo "⬆️  Upgrading AI-Tourist with Helm..."
+	@echo "   Using values: $(HELM_VALUES_FILE)"
+	helm upgrade ai-tourist helm/ai-tourist \
+		--namespace ai-tourist \
+		--values $(HELM_VALUES_FILE) \
+		--wait \
+		--timeout 5m
+
+.PHONY: helm-uninstall
+helm-uninstall:
+	@echo "🗑️  Uninstalling AI-Tourist..."
+	helm uninstall ai-tourist --namespace ai-tourist || true
+	kubectl delete namespace ai-tourist --ignore-not-found=true
+
+.PHONY: helm-status
+helm-status:
+	@echo "📊 Helm release status:"
+	helm status ai-tourist --namespace ai-tourist
+
+.PHONY: helm-values
+helm-values:
+	@echo "📄 Current values file: $(HELM_VALUES_FILE)"
+	@echo ""
+	@cat $(HELM_VALUES_FILE)
+
+# Usage examples:
+# TAG=dev make helm-install    # Uses values-dev.yaml
+# TAG=prod make helm-install   # Uses values.yaml
+# make helm-install            # Default: uses values-dev.yaml

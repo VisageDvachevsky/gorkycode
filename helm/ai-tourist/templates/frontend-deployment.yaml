@@ -3,22 +3,22 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-frontend
   labels:
-    app: {{ .Values.frontend.name }}
+    app: frontend
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.frontend.replicas }}
+  replicas: {{ .Values.frontend.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.frontend.name }}
+      app: frontend
   template:
     metadata:
       labels:
-        app: {{ .Values.frontend.name }}
+        app: frontend
     spec:
       containers:
       - name: frontend
-        image: "{{ .Values.frontend.image }}:{{ .Values.frontend.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
         ports:
         - name: http
           containerPort: {{ .Values.frontend.service.port }}

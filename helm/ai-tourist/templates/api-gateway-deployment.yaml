@@ -3,17 +3,17 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-api-gateway
   labels:
-    app: {{ .Values.apiGateway.name }}
+    app: api-gateway
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.apiGateway.replicas }}
+  replicas: {{ .Values.apiGateway.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.apiGateway.name }}
+      app: api-gateway
   template:
     metadata:
       labels:
-        app: {{ .Values.apiGateway.name }}
+        app: api-gateway
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
@@ -21,8 +21,8 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: "{{ .Values.apiGateway.image }}:{{ .Values.apiGateway.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.apiGateway.image.repository }}:{{ .Values.apiGateway.image.tag }}"
+        imagePullPolicy: {{ .Values.apiGateway.image.pullPolicy }}
         ports:
         - name: http
           containerPort: {{ .Values.apiGateway.service.port }}

@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-poi-service
   labels:
-    app: {{ .Values.poiService.name }}
+    app: poi-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.poiService.replicas }}
+  replicas: {{ .Values.poiService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.poiService.name }}
+      app: poi-service
   template:
     metadata:
       labels:
-        app: {{ .Values.poiService.name }}
+        app: poi-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9096"
     spec:
       containers:
       - name: poi-service
-        image: "{{ .Values.poiService.image }}:{{ .Values.poiService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.poiService.image.repository }}:{{ .Values.poiService.image.tag }}"
+        imagePullPolicy: {{ .Values.poiService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.poiService.service.port }}

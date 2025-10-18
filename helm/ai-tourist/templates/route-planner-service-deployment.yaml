@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-route-planner-service
   labels:
-    app: {{ .Values.routePlannerService.name }}
+    app: route-planner-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.routePlannerService.replicas }}
+  replicas: {{ .Values.routePlannerService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.routePlannerService.name }}
+      app: route-planner-service
   template:
     metadata:
       labels:
-        app: {{ .Values.routePlannerService.name }}
+        app: route-planner-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9093"
     spec:
       containers:
       - name: route-planner-service
-        image: "{{ .Values.routePlannerService.image }}:{{ .Values.routePlannerService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.routePlannerService.image.repository }}:{{ .Values.routePlannerService.image.tag }}"
+        imagePullPolicy: {{ .Values.routePlannerService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.routePlannerService.service.port }}

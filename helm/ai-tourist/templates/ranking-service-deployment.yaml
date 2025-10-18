@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-ranking-service
   labels:
-    app: {{ .Values.rankingService.name }}
+    app: ranking-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.rankingService.replicas }}
+  replicas: {{ .Values.rankingService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.rankingService.name }}
+      app: ranking-service
   template:
     metadata:
       labels:
-        app: {{ .Values.rankingService.name }}
+        app: ranking-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9092"
     spec:
       containers:
       - name: ranking-service
-        image: "{{ .Values.rankingService.image }}:{{ .Values.rankingService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.rankingService.image.repository }}:{{ .Values.rankingService.image.tag }}"
+        imagePullPolicy: {{ .Values.rankingService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.rankingService.service.port }}

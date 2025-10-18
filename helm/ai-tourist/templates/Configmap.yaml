@@ -17,6 +17,7 @@ data:
   EMBEDDING_SERVICE_URL: "embedding-service:50051"
   RANKING_SERVICE_URL: "ranking-service:50052"
   ROUTE_PLANNER_SERVICE_URL: "route-planner-service:50053"
+  ROUTE_SERVICE_URL: route-planner-service:50053
   LLM_SERVICE_URL: "llm-service:50054"
   GEOCODING_SERVICE_URL: "geocoding-service:50055"
   POI_SERVICE_URL: "poi-service:50056"

@@ -3,25 +3,25 @@ kind: Deployment
 metadata:
   name: {{ include "ai-tourist.fullname" . }}-geocoding-service
   labels:
-    app: {{ .Values.geocodingService.name }}
+    app: geocoding-service
     {{- include "ai-tourist.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.geocodingService.replicas }}
+  replicas: {{ .Values.geocodingService.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Values.geocodingService.name }}
+      app: geocoding-service
   template:
     metadata:
       labels:
-        app: {{ .Values.geocodingService.name }}
+        app: geocoding-service
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9095"
     spec:
       containers:
       - name: geocoding-service
-        image: "{{ .Values.geocodingService.image }}:{{ .Values.geocodingService.tag }}"
-        imagePullPolicy: IfNotPresent
+        image: "{{ .Values.geocodingService.image.repository }}:{{ .Values.geocodingService.image.tag }}"
+        imagePullPolicy: {{ .Values.geocodingService.image.pullPolicy }}
         ports:
         - name: grpc
           containerPort: {{ .Values.geocodingService.service.port }}
