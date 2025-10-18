@@ -1,36 +1,15 @@
 syntax = "proto3";
-
 package llm;
 
 service LLMService {
-  rpc GenerateRouteExplanation(RouteExplanationRequest) returns (RouteExplanationResponse);
+  rpc GenerateExplanation(ExplanationRequest) returns (ExplanationResponse);
 }
 
-message RouteExplanationRequest {
-  repeated POIContext route = 1;
-  string user_interests = 2;
-  string social_mode = 3;
-  string intensity = 4;
+message ExplanationRequest {
+  string route = 1;
+  map<string, string> user_preferences = 2;
 }
 
-message POIContext {
-  int32 id = 1;
-  string name = 2;
-  string description = 3;
-  string category = 4;
-  repeated string tags = 5;
-  string local_tip = 6;
-}
-
-message RouteExplanationResponse {
-  string summary = 1;
-  repeated POIExplanation explanations = 2;
-  repeated string notes = 3;
-  string atmospheric_description = 4;
-}
-
-message POIExplanation {
-  int32 poi_id = 1;
-  string why = 2;
-  string tip = 3;
+message ExplanationResponse {
+  string explanation = 1;
 }

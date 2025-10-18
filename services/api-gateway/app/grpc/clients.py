@@ -1,249 +1,176 @@
-import logging
-from typing import Dict, Any, List, Optional
 import grpc
-from grpc import aio
+from typing import Optional
+from app.grpc.proto import (
+    embedding_pb2,
+    embedding_pb2_grpc,
+    poi_pb2,
+    poi_pb2_grpc,
+    ranking_pb2,
+    ranking_pb2_grpc,
+    route_planner_pb2,
+    route_planner_pb2_grpc,
+    llm_pb2,
+    llm_pb2_grpc,
+    geocoding_pb2,
+    geocoding_pb2_grpc
+)
 
-from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+class EmbeddingClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[embedding_pb2_grpc.EmbeddingServiceStub] = None
 
-
-class POIGRPCClient:
-    """Client for POI Service gRPC"""
-    
-    def __init__(self):
-        self.channel: Optional[aio.Channel] = None
-        self.stub = None
-    
     async def connect(self):
-        """Connect to POI service"""
-        try:
-            self.channel = aio.insecure_channel(settings.POI_SERVICE_URL)
-            
-            from app.grpc.proto import poi_pb2, poi_pb2_grpc
-            self.stub = poi_pb2_grpc.POIServiceStub(self.channel)
-            
-            logger.info(f"✓ Connected to POI Service: {settings.POI_SERVICE_URL}")
-        except Exception as e:
-            logger.error(f"Failed to connect to POI service: {e}")
-            raise
-    
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = embedding_pb2_grpc.EmbeddingServiceStub(self.channel)
+
     async def close(self):
-        """Close connection"""
         if self.channel:
             await self.channel.close()
-            logger.info("✓ POI Service connection closed")
-    
-    async def get_categories(self) -> List[Dict[str, Any]]:
-        """Get all POI categories with counts"""
-        from app.grpc.proto import poi_pb2
-        
-        try:
-            request = poi_pb2.GetCategoriesRequest()
-            response = await self.stub.GetCategories(request)
-            
-            categories = [
-                {
-                    "value": cat.value,
-                    "label": cat.label,
-                    "count": cat.count
-                }
-                for cat in response.categories
-            ]
-            
-            return categories
-            
-        except grpc.RpcError as e:
-            logger.error(f"gRPC error getting categories: {e.code()} - {e.details()}")
-            raise
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        try:
-            await self.get_categories()
-            return True
-        except:
-            return False
+
+    async def generate_embedding(self, text: str, use_cache: bool = True):
+        request = embedding_pb2.EmbeddingRequest(text=text, use_cache=use_cache)
+        response = await self.stub.GenerateEmbedding(request)
+        return list(response.vector)
 
 
-class EmbeddingGRPCClient:
-    """Client for Embedding Service gRPC"""
-    
-    def __init__(self):
-        self.channel: Optional[aio.Channel] = None
-        self.stub = None
-    
+class POIClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[poi_pb2_grpc.POIServiceStub] = None
+
     async def connect(self):
-        """Connect to Embedding service"""
-        try:
-            self.channel = aio.insecure_channel(settings.EMBEDDING_SERVICE_URL)
-            
-            from app.grpc.proto import embedding_pb2, embedding_pb2_grpc
-            self.stub = embedding_pb2_grpc.EmbeddingServiceStub(self.channel)
-            
-            logger.info(f"✓ Connected to Embedding Service: {settings.EMBEDDING_SERVICE_URL}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Embedding service: {e}")
-            raise
-    
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = poi_pb2_grpc.POIServiceStub(self.channel)
+
     async def close(self):
-        """Close connection"""
         if self.channel:
             await self.channel.close()
-            logger.info("✓ Embedding Service connection closed")
-    
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text"""
-        from app.grpc.proto import embedding_pb2
-        
-        try:
-            request = embedding_pb2.EmbeddingRequest(text=text)
-            response = await self.stub.GenerateEmbedding(request)
-            return list(response.embedding)
-            
-        except grpc.RpcError as e:
-            logger.error(f"gRPC error generating embedding: {e.code()} - {e.details()}")
-            raise
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        try:
-            await self.generate_embedding("test")
-            return True
-        except:
-            return False
+
+    async def search_pois(self, query: str, limit: int = 10):
+        request = poi_pb2.SearchRequest(query=query, limit=limit)
+        response = await self.stub.SearchPOIs(request)
+        return response.pois
 
 
-class RankingGRPCClient:
-    """Client for Ranking Service gRPC"""
-    
-    def __init__(self):
-        self.channel: Optional[aio.Channel] = None
-        self.stub = None
-    
+class RankingClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[ranking_pb2_grpc.RankingServiceStub] = None
+
     async def connect(self):
-        """Connect to Ranking service"""
-        try:
-            self.channel = aio.insecure_channel(settings.RANKING_SERVICE_URL)
-            
-            from app.grpc.proto import ranking_pb2, ranking_pb2_grpc
-            self.stub = ranking_pb2_grpc.RankingServiceStub(self.channel)
-            
-            logger.info(f"✓ Connected to Ranking Service: {settings.RANKING_SERVICE_URL}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Ranking service: {e}")
-            raise
-    
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = ranking_pb2_grpc.RankingServiceStub(self.channel)
+
     async def close(self):
-        """Close connection"""
         if self.channel:
             await self.channel.close()
-            logger.info("✓ Ranking Service connection closed")
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        return self.stub is not None
+
+    async def rank_pois(self, user_embedding, poi_ids, preferences):
+        request = ranking_pb2.RankingRequest(
+            user_embedding=user_embedding,
+            poi_ids=poi_ids,
+            preferences=preferences
+        )
+        response = await self.stub.RankPOIs(request)
+        return response.ranked_pois
 
 
-class RoutePlannerGRPCClient:
-    """Client for Route Planner Service gRPC"""
-    
-    def __init__(self):
-        self.channel: Optional[aio.Channel] = None
-        self.stub = None
-    
+class RoutePlannerClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[route_planner_pb2_grpc.RoutePlannerServiceStub] = None
+
     async def connect(self):
-        """Connect to Route Planner service"""
-        try:
-            self.channel = aio.insecure_channel(settings.ROUTE_PLANNER_SERVICE_URL)
-            
-            from app.grpc.proto import route_pb2, route_pb2_grpc
-            self.stub = route_pb2_grpc.RoutePlannerServiceStub(self.channel)
-            
-            logger.info(f"✓ Connected to Route Planner Service: {settings.ROUTE_PLANNER_SERVICE_URL}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Route Planner service: {e}")
-            raise
-    
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = route_planner_pb2_grpc.RoutePlannerServiceStub(self.channel)
+
     async def close(self):
-        """Close connection"""
         if self.channel:
             await self.channel.close()
-            logger.info("✓ Route Planner Service connection closed")
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        return self.stub is not None
+
+    async def plan_route(self, poi_ids, start_location, preferences):
+        request = route_planner_pb2.RouteRequest(
+            poi_ids=poi_ids,
+            start_location=start_location,
+            preferences=preferences
+        )
+        response = await self.stub.PlanRoute(request)
+        return response
 
 
-class LLMGRPCClient:
-    """Client for LLM Service gRPC"""
-    
-    def __init__(self):
-        self.channel: Optional[aio.Channel] = None
-        self.stub = None
-    
+class LLMClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[llm_pb2_grpc.LLMServiceStub] = None
+
     async def connect(self):
-        """Connect to LLM service"""
-        try:
-            self.channel = aio.insecure_channel(settings.LLM_SERVICE_URL)
-            
-            from app.grpc.proto import llm_pb2, llm_pb2_grpc
-            self.stub = llm_pb2_grpc.LLMServiceStub(self.channel)
-            
-            logger.info(f"✓ Connected to LLM Service: {settings.LLM_SERVICE_URL}")
-        except Exception as e:
-            logger.error(f"Failed to connect to LLM service: {e}")
-            raise
-    
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = llm_pb2_grpc.LLMServiceStub(self.channel)
+
     async def close(self):
-        """Close connection"""
         if self.channel:
             await self.channel.close()
-            logger.info("✓ LLM Service connection closed")
-    
-    async def health_check(self) -> bool:
-        """Check if service is healthy"""
-        return self.stub is not None
+
+    async def generate_explanation(self, route, user_preferences):
+        request = llm_pb2.ExplanationRequest(
+            route=route,
+            user_preferences=user_preferences
+        )
+        response = await self.stub.GenerateExplanation(request)
+        return response.explanation
+
+
+class GeocodingClient:
+    def __init__(self, host: str, port: int):
+        self.address = f"{host}:{port}"
+        self.channel: Optional[grpc.aio.Channel] = None
+        self.stub: Optional[geocoding_pb2_grpc.GeocodingServiceStub] = None
+
+    async def connect(self):
+        self.channel = grpc.aio.insecure_channel(self.address)
+        self.stub = geocoding_pb2_grpc.GeocodingServiceStub(self.channel)
+
+    async def close(self):
+        if self.channel:
+            await self.channel.close()
+
+    async def geocode(self, address: str):
+        request = geocoding_pb2.GeocodeRequest(address=address)
+        response = await self.stub.Geocode(request)
+        return response
 
 
 class GRPCClients:
-    """Manager for all gRPC clients"""
-    
     def __init__(self):
-        self.poi_client = POIGRPCClient()
-        self.embedding_client = EmbeddingGRPCClient()
-        self.ranking_client = RankingGRPCClient()
-        self.route_planner_client = RoutePlannerGRPCClient()
-        self.llm_client = LLMGRPCClient()
-    
+        self.embedding_client = EmbeddingClient("ai-tourist-embedding-service", 50051)
+        self.poi_client = POIClient("ai-tourist-poi-service", 50052)
+        self.ranking_client = RankingClient("ai-tourist-ranking-service", 50053)
+        self.route_planner_client = RoutePlannerClient("ai-tourist-route-planner-service", 50054)
+        self.llm_client = LLMClient("ai-tourist-llm-service", 50055)
+        self.geocoding_client = GeocodingClient("ai-tourist-geocoding-service", 50056)
+
     async def connect_all(self):
-        """Connect to all services"""
-        await self.poi_client.connect()
         await self.embedding_client.connect()
+        await self.poi_client.connect()
         await self.ranking_client.connect()
         await self.route_planner_client.connect()
         await self.llm_client.connect()
-        logger.info("✅ All gRPC clients connected")
-    
+        await self.geocoding_client.connect()
+
     async def close_all(self):
-        """Close all connections"""
-        await self.poi_client.close()
         await self.embedding_client.close()
+        await self.poi_client.close()
         await self.ranking_client.close()
         await self.route_planner_client.close()
         await self.llm_client.close()
-        logger.info("✅ All gRPC clients closed")
-    
-    async def health_check(self) -> Dict[str, bool]:
-        """Check health of all services"""
-        return {
-            "poi_service": await self.poi_client.health_check(),
-            "embedding_service": await self.embedding_client.health_check(),
-            "ranking_service": await self.ranking_client.health_check(),
-            "route_planner_service": await self.route_planner_client.health_check(),
-            "llm_service": await self.llm_client.health_check(),
-        }
+        await self.geocoding_client.close()
 
 
 grpc_clients = GRPCClients()

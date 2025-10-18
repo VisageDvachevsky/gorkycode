@@ -1,30 +1,26 @@
 syntax = "proto3";
-
 package geocoding;
 
 service GeocodingService {
-  rpc GeocodeAddress(GeocodeRequest) returns (GeocodeResponse);
-  rpc ValidateCoordinates(CoordinateValidationRequest) returns (CoordinateValidationResponse);
+  rpc Geocode(GeocodeRequest) returns (GeocodeResponse);
+  rpc ReverseGeocode(ReverseGeocodeRequest) returns (ReverseGeocodeResponse);
 }
 
 message GeocodeRequest {
   string address = 1;
-  string city = 2;
 }
 
 message GeocodeResponse {
-  bool success = 1;
-  double lat = 2;
-  double lon = 3;
-  string formatted_address = 4;
+  double lat = 1;
+  double lon = 2;
+  string formatted_address = 3;
 }
 
-message CoordinateValidationRequest {
+message ReverseGeocodeRequest {
   double lat = 1;
   double lon = 2;
 }
 
-message CoordinateValidationResponse {
-  bool valid = 1;
-  string reason = 2;
+message ReverseGeocodeResponse {
+  string address = 1;
 }
