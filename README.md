@@ -129,7 +129,10 @@ make all                 # build → deploy → test
 ### 4. Доступ к приложению
 - Узнайте IP: `minikube ip` и пропишите в `/etc/hosts` строку `192.168.49.2 ai-tourist.local` (точное значение выводит `make show-url`).
 - Откройте `http://ai-tourist.local` — фронт обслуживается через ingress.
-- **WSL / Windows:** если браузер из Windows не видит Minikube IP, запустите `make port-forward` и заходите по `http://localhost:8080` (фронт) и `http://localhost:8000` (API). Скрипт аккуратно завершает `kubectl port-forward` по Ctrl+C.
+- **WSL / Windows:**
+  - Добавьте запись `192.168.49.2 ai-tourist.local` в файл `C:\Windows\System32\drivers\etc\hosts` (откройте редактор от имени администратора).
+  - Если Windows не видит Minikube IP, запустите `make port-forward` внутри WSL и откройте `http://localhost:8080` (фронт) и `http://localhost:8000` (API). Скрипт пробрасывает порты на все интерфейсы и корректно завершает `kubectl port-forward` по Ctrl+C.
+  - Git-конфигурация по умолчанию может конвертировать окончания строк; репозиторий уже включает `.gitattributes`, чтобы все shell-скрипты оставались в Unix-формате и запускались без ошибок `bash\r`.
 
 ### 5. Полезные команды
 ```bash
