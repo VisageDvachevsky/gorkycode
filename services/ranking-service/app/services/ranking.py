@@ -1,6 +1,8 @@
 import logging
-import numpy as np
 from typing import List, Dict
+
+import grpc
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 

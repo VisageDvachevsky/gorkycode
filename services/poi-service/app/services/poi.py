@@ -1,8 +1,10 @@
 import logging
 from typing import List
+
+import grpc
+import httpx
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-import httpx
 
 from app.proto import poi_pb2, poi_pb2_grpc
 from app.core.config import settings

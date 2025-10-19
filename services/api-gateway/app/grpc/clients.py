@@ -40,10 +40,16 @@ class EmbeddingClient:
         if self.channel:
             await self.channel.close()
 
-    async def generate_embedding(self, text: str, use_cache: bool = True) -> List[float]:
+    async def generate_embedding(
+        self,
+        text: str,
+        use_cache: bool = True,
+    ) -> embedding_pb2.EmbeddingResponse:
+        if not self.stub:
+            raise RuntimeError("Embedding gRPC stub is not initialised")
+
         request = embedding_pb2.EmbeddingRequest(text=text, use_cache=use_cache)
-        response = await self.stub.GenerateEmbedding(request)
-        return list(response.vector)
+        return await self.stub.GenerateEmbedding(request)
 
 
 class POIClient:
@@ -66,6 +72,9 @@ class POIClient:
             await self.channel.close()
 
     async def get_all_pois(self, categories: List[str] = None, with_embeddings: bool = True):
+        if not self.stub:
+            raise RuntimeError("POI gRPC stub is not initialised")
+
         request = poi_pb2.GetPOIsRequest(
             categories=categories or [],
             with_embeddings=with_embeddings
@@ -74,6 +83,9 @@ class POIClient:
         return response.pois
 
     async def get_categories(self) -> List[Dict]:
+        if not self.stub:
+            raise RuntimeError("POI gRPC stub is not initialised")
+
         request = poi_pb2.GetCategoriesRequest()
         response = await self.stub.GetCategories(request)
         
@@ -87,6 +99,9 @@ class POIClient:
         ]
 
     async def find_cafes_near_location(self, lat: float, lon: float, radius_km: float = 1.0):
+        if not self.stub:
+            raise RuntimeError("POI gRPC stub is not initialised")
+
         request = poi_pb2.CafeSearchRequest(
             lat=lat,
             lon=lon,
@@ -123,6 +138,9 @@ class RankingClient:
         top_k: int = 20,
         categories_filter: List[str] = None
     ):
+        if not self.stub:
+            raise RuntimeError("Ranking gRPC stub is not initialised")
+
         request = ranking_pb2.RankingRequest(
             user_embedding=user_embedding,
             social_mode=social_mode,
@@ -157,25 +175,16 @@ class RoutePlannerClient:
         self,
         start_lat: float,
         start_lon: float,
-        pois: List,
+        pois: List[route_pb2.POIInfo],
         available_hours: float
     ):
-        poi_infos = [
-            route_pb2.POIInfo(
-                id=poi.poi_id,
-                name=poi.name,
-                lat=poi.lat,
-                lon=poi.lon,
-                avg_visit_minutes=poi.avg_visit_minutes,
-                rating=poi.rating
-            )
-            for poi in pois
-        ]
-        
+        if not self.stub:
+            raise RuntimeError("Route planner gRPC stub is not initialised")
+
         request = route_pb2.RouteOptimizationRequest(
             start_lat=start_lat,
             start_lon=start_lon,
-            pois=poi_infos,
+            pois=pois,
             available_hours=available_hours
         )
         response = await self.stub.OptimizeRoute(request)
@@ -187,11 +196,14 @@ class RoutePlannerClient:
         start_lon: float,
         waypoints: List[tuple]
     ):
+        if not self.stub:
+            raise RuntimeError("Route planner gRPC stub is not initialised")
+
         coords = [
             route_pb2.Coordinate(lat=lat, lon=lon)
             for lat, lon in waypoints
         ]
-        
+
         request = route_pb2.RouteGeometryRequest(
             start_lat=start_lat,
             start_lon=start_lon,
@@ -227,6 +239,9 @@ class LLMClient:
         social_mode: str,
         intensity: str
     ):
+        if not self.stub:
+            raise RuntimeError("LLM gRPC stub is not initialised")
+
         poi_contexts = [
             llm_pb2.POIContext(
                 id=poi.poi_id,
@@ -269,6 +284,9 @@ class GeocodingClient:
             await self.channel.close()
 
     async def geocode_address(self, address: str, city: str = "Нижний Новгород"):
+        if not self.stub:
+            raise RuntimeError("Geocoding gRPC stub is not initialised")
+
         request = geocoding_pb2.GeocodeRequest(
             address=address,
             city=city
@@ -277,6 +295,9 @@ class GeocodingClient:
         return response
 
     async def validate_coordinates(self, lat: float, lon: float):
+        if not self.stub:
+            raise RuntimeError("Geocoding gRPC stub is not initialised")
+
         request = geocoding_pb2.CoordinateValidationRequest(
             lat=lat,
             lon=lon

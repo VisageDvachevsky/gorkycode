@@ -1,11 +1,11 @@
 import logging
 import hashlib
 import pickle
-from typing import List, Tuple
+from typing import List
 
+import grpc
 import redis.asyncio as aioredis
 from sentence_transformers import SentenceTransformer
-import numpy as np
 
 from app.proto import embedding_pb2, embedding_pb2_grpc
 from app.core.config import settings
