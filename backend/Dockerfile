@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PIP_DEFAULT_TIMEOUT=100
 
-ENV POETRY_VERSION=1.8.4 \
+ENV POETRY_VERSION=2.2.1 \
     POETRY_HOME="/opt/poetry" \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_VIRTUALENVS_CREATE=true \
@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # Теперь устанавливаем остальные зависимости через Poetry
 RUN --mount=type=cache,target=/root/.cache/pypoetry \
-    poetry install --only main --no-root --no-directory
+    poetry install --without dev --no-root
 
 # Установка PyTorch CPU-only
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -65,7 +65,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 COPY . .
 
 # Установка самого проекта
-RUN poetry install --only main
+RUN poetry install --without dev
 
 # ==================== Production Runtime ====================
 FROM python:3.11-slim as production

@@ -6,12 +6,12 @@ RUN apt-get update && apt-get install -y \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry==1.7.1
+RUN pip install --no-cache-dir "poetry==2.2.1"
 
 COPY services/route-planner-service/pyproject.toml services/route-planner-service/poetry.lock* ./
 
 RUN poetry config virtualenvs.create false && \
-    poetry install --only main --no-root --no-interaction --no-ansi
+    poetry install --without dev --no-root --no-interaction --no-ansi
 
 FROM base AS production
 

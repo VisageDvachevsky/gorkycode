@@ -1522,6 +1522,20 @@ files = [
 ]
 
 [[package]]
+name = "pyjwt"
+version = "2.10.1"
+description = "JSON Web Token implementation in Python"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = []
+develop = false
+
+[package.source]
+type = "directory"
+url = "../../vendor/pyjwt"
+
+[[package]]
 name = "redis"
 version = "5.3.1"
 description = "Python client for Redis database and key-value store"
@@ -2204,4 +2218,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "6fe00542231849ce660010f91dbdb8848d1ab55df14385ac1de83e181c1c3c67"
+content-hash = "39eb31be30004107b60020902d10c8edb1721b1036c1ea4063951fc693da5932"

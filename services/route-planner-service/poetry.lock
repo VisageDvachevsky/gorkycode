@@ -724,16 +724,12 @@ description = "JSON Web Token implementation in Python"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
-files = [
-    {file = "PyJWT-2.10.1-py3-none-any.whl", hash = "sha256:dcdd193e30abefd5debf142f9adfcdd2b58004e644f25406ffaebd50bd98dacb"},
-    {file = "pyjwt-2.10.1.tar.gz", hash = "sha256:3cc5772eb20009233caf06e9d8a0577824723b44e6648ee0a2aedb6cf9381953"},
-]
+files = []
+develop = false
 
-[package.extras]
-crypto = ["cryptography (>=3.4.0)"]
-dev = ["coverage[toml] (==5.0.4)", "cryptography (>=3.4.0)", "pre-commit", "pytest (>=6.0.0,<7.0.0)", "sphinx", "sphinx-rtd-theme", "zope.interface"]
-docs = ["sphinx", "sphinx-rtd-theme", "zope.interface"]
-tests = ["coverage[toml] (==5.0.4)", "pytest (>=6.0.0,<7.0.0)"]
+[package.source]
+type = "directory"
+url = "../../vendor/pyjwt"
 
 [[package]]
 name = "redis"
@@ -785,4 +781,4 @@ test = ["pytest", "tornado (>=4.5)", "typeguard"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "191373da751046117ebbe94536d69c117d92b478a820ec06983a5cff6cda0985"
+content-hash = "6bc03091c15ac1006c9cd3b6a0263f4715954a31625feec3b57919d5126d2336"

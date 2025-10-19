@@ -7,12 +7,12 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir poetry==1.7.1
+RUN pip install --no-cache-dir "poetry==2.2.1"
 
 COPY services/poi-service/pyproject.toml services/poi-service/poetry.lock* ./
 
 RUN poetry config virtualenvs.create false && \
-    poetry install --only main --no-root --no-interaction --no-ansi
+    poetry install --without dev --no-root --no-interaction --no-ansi
 
 RUN pip install grpcio-tools sentence-transformers
 
