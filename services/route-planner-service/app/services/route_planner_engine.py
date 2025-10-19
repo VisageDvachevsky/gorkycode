@@ -189,9 +189,22 @@ class RoutePlanner:
         while remaining and total_time < available_minutes:
             best_idx = None
             best_score = float("inf")
+            best_dist = None
+            best_walk_time = 0.0
+            best_poi_time = 0
 
             for poi_idx in remaining:
                 dist = distance_matrix[current_idx + 1][poi_idx + 1]
+
+                if not np.isfinite(dist):
+                    continue
+
+                walk_time = self.calculate_walk_time_minutes(dist)
+                poi_time = pois[poi_idx].avg_visit_minutes
+
+                if total_time + walk_time + poi_time > available_minutes:
+                    continue
+
                 score = dist
 
                 if current_idx >= 0 and prev_direction is not None:
@@ -214,15 +227,11 @@ class RoutePlanner:
                 if score < best_score:
                     best_score = score
                     best_idx = poi_idx
+                    best_dist = dist
+                    best_walk_time = walk_time
+                    best_poi_time = poi_time
 
             if best_idx is None:
-                break
-
-            nearest_dist = distance_matrix[current_idx + 1][best_idx + 1]
-            walk_time = self.calculate_walk_time_minutes(nearest_dist)
-            poi_time = pois[best_idx].avg_visit_minutes
-
-            if total_time + walk_time + poi_time > available_minutes:
                 break
 
             if current_idx >= 0:
@@ -240,8 +249,8 @@ class RoutePlanner:
                 )
 
             route.append(best_idx)
-            total_time += walk_time + poi_time
-            total_distance += nearest_dist
+            total_time += best_walk_time + best_poi_time
+            total_distance += best_dist if best_dist is not None else 0.0
             current_idx = best_idx
             remaining.remove(best_idx)
 

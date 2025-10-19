@@ -309,7 +309,7 @@ class TwoGISClient:
 
         data = await self._request_post(
             self.DISTANCE_MATRIX_URL,
-            params={"version": "2.0"},
+            params={"version": "2.0", "transport": transport},
             json_body=request_body,
             timeout=30,
         )
