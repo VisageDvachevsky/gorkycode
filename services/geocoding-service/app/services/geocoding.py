@@ -1,4 +1,6 @@
 import logging
+
+import grpc
 import httpx
 
 from app.proto import geocoding_pb2, geocoding_pb2_grpc

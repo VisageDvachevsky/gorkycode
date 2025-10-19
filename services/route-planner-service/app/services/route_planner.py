@@ -1,6 +1,8 @@
 import logging
-import numpy as np
 from typing import List, Tuple
+
+import grpc
+import numpy as np
 from geopy.distance import geodesic
 
 from app.proto import route_pb2, route_pb2_grpc
