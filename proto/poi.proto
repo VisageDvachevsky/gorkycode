@@ -1,30 +1,69 @@
 syntax = "proto3";
+
 package poi;
 
 service POIService {
-  rpc SearchPOIs(SearchRequest) returns (SearchResponse);
-  rpc GetPOI(GetPOIRequest) returns (POI);
+  rpc GetAllPOIs(GetPOIsRequest) returns (GetPOIsResponse);
+  rpc GetCategories(GetCategoriesRequest) returns (GetCategoriesResponse);
+  rpc FindCafesNearLocation(CafeSearchRequest) returns (CafeSearchResponse);
 }
 
-message SearchRequest {
-  string query = 1;
-  int32 limit = 2;
+message GetPOIsRequest {
+  repeated string categories = 1;
+  bool with_embeddings = 2;
 }
 
-message SearchResponse {
+message GetPOIsResponse {
   repeated POI pois = 1;
 }
 
-message GetPOIRequest {
+message GetCategoriesRequest {
+}
+
+message GetCategoriesResponse {
+  repeated Category categories = 1;
+}
+
+message Category {
+  string value = 1;
+  string label = 2;
+  int32 count = 3;
+}
+
+message CafeSearchRequest {
+  double lat = 1;
+  double lon = 2;
+  double radius_km = 3;
+}
+
+message CafeSearchResponse {
+  repeated Cafe cafes = 1;
+}
+
+message Cafe {
   string id = 1;
+  string name = 2;
+  double lat = 3;
+  double lon = 4;
+  string address = 5;
+  repeated string rubrics = 6;
+  double distance = 7;
 }
 
 message POI {
-  string id = 1;
+  int32 id = 1;
   string name = 2;
-  string description = 3;
-  double lat = 4;
-  double lon = 5;
-  repeated string categories = 6;
-  float rating = 7;
+  double lat = 3;
+  double lon = 4;
+  string category = 5;
+  repeated string tags = 6;
+  string description = 7;
+  int32 avg_visit_minutes = 8;
+  double rating = 9;
+  repeated float embedding = 10;
+  string local_tip = 11;
+  string photo_tip = 12;
+  string address = 13;
+  string social_mode = 14;
+  string intensity_level = 15;
 }

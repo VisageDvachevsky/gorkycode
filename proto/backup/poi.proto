@@ -1,0 +1,30 @@
+syntax = "proto3";
+package poi;
+
+service POIService {
+  rpc SearchPOIs(SearchRequest) returns (SearchResponse);
+  rpc GetPOI(GetPOIRequest) returns (POI);
+}
+
+message SearchRequest {
+  string query = 1;
+  int32 limit = 2;
+}
+
+message SearchResponse {
+  repeated POI pois = 1;
+}
+
+message GetPOIRequest {
+  string id = 1;
+}
+
+message POI {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  double lat = 4;
+  double lon = 5;
+  repeated string categories = 6;
+  float rating = 7;
+}

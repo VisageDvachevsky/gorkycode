@@ -1,0 +1,29 @@
+syntax = "proto3";
+package route_planner;
+
+service RoutePlannerService {
+  rpc PlanRoute(RouteRequest) returns (RouteResponse);
+}
+
+message RouteRequest {
+  repeated string poi_ids = 1;
+  Location start_location = 2;
+  map<string, float> preferences = 3;
+}
+
+message RouteResponse {
+  repeated RoutePoint route = 1;
+  float total_distance = 2;
+  int32 estimated_duration = 3;
+}
+
+message Location {
+  double lat = 1;
+  double lon = 2;
+}
+
+message RoutePoint {
+  string poi_id = 1;
+  Location location = 2;
+  int32 order = 3;
+}

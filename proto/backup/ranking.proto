@@ -1,0 +1,21 @@
+syntax = "proto3";
+package ranking;
+
+service RankingService {
+  rpc RankPOIs(RankingRequest) returns (RankingResponse);
+}
+
+message RankingRequest {
+  repeated float user_embedding = 1;
+  repeated string poi_ids = 2;
+  map<string, float> preferences = 3;
+}
+
+message RankingResponse {
+  repeated RankedPOI ranked_pois = 1;
+}
+
+message RankedPOI {
+  string poi_id = 1;
+  float score = 2;
+}
