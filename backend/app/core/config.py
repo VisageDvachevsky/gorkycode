@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
     
     TWOGIS_API_KEY: str | None = None
+    NAVITIA_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     
