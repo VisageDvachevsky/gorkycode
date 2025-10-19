@@ -178,7 +178,6 @@ Vite запускает dev-сервер, который можно прокси
 - **Ingress недоступен из Windows:** используйте `make port-forward` или встроенный `minikube tunnel`.
 - **Не собираются образы:** убедитесь, что `eval $(minikube docker-env)` выполнен в вашей оболочке или используйте `make build`, который делает это сам.【F:Makefile†L18-L35】
 - **LLM не отвечает:** проверьте значения `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` в секрете `ai-tourist-secrets` и логи `ai-tourist-llm-service`.
-- **Хотите вернуться к монолиту?** Папка `backend/` сохранена целиком — можно поднять старую версию через Docker Compose, но рекомендуемый путь — микросервисы.
 
 ---
 
