@@ -74,3 +74,30 @@ async def test_optimize_route_haversine_fallback(monkeypatch):
 
     assert route  # fallback still returns route
     assert distance > 0
+
+
+def test_greedy_skips_overbudget_and_unreachable():
+    planner = RoutePlanner()
+
+    pois = [
+        RoutePOI(id=1, name="Far", lat=0.0, lon=0.0, avg_visit_minutes=120),
+        RoutePOI(id=2, name="Near", lat=0.0, lon=0.0, avg_visit_minutes=20),
+        RoutePOI(id=3, name="Blocked", lat=0.0, lon=0.0, avg_visit_minutes=15),
+    ]
+
+    matrix = np.array(
+        [
+            [0.0, 5.0, 1.0, np.inf],
+            [5.0, 0.0, 1.0, np.inf],
+            [1.0, 1.0, 0.0, np.inf],
+            [np.inf, np.inf, np.inf, 0.0],
+        ]
+    )
+
+    route, total_time, total_distance = planner._greedy_nearest_neighbor(
+        matrix, pois, available_minutes=60
+    )
+
+    assert [pois[i].id for i in route] == [2]
+    assert total_time == planner.calculate_walk_time_minutes(1.0) + pois[1].avg_visit_minutes
+    assert total_distance == pytest.approx(1.0)
