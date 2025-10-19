@@ -19,6 +19,9 @@ spec:
       - name: frontend
         image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        env:
+        - name: API_UPSTREAM
+          value: "http://{{ include "ai-tourist.fullname" . }}-api-gateway:8000"
         ports:
         - name: http
           containerPort: {{ .Values.frontend.service.port }}

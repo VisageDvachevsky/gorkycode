@@ -69,7 +69,7 @@ show-url:
 port-forward:
 	@echo "$(YELLOW)Starting background port-forward processes...$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop when you are done testing.$(NC)"
-	@./scripts/port-forward.sh $(NAMESPACE)
+	@bash ./scripts/port-forward.sh $(NAMESPACE)
 
 open:
 	@MINIKUBE_IP=$$(minikube ip); \

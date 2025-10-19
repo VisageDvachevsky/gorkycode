@@ -1,6 +1,12 @@
 import { motion } from 'framer-motion'
 import { Clock, Users, Zap } from 'lucide-react'
 import type { RouteRequest } from '../../types'
+import {
+  DEFAULT_ROUTE_HOURS,
+  MAX_ROUTE_HOURS,
+  MIN_ROUTE_HOURS,
+  sanitizeRouteHours,
+} from '../../constants/route'
 
 interface Props {
   formData: Partial<RouteRequest>
@@ -28,6 +34,12 @@ const INTENSITY_LEVELS = [
 ]
 
 export default function StepDuration({ formData, updateFormData }: Props) {
+  const hoursValue = sanitizeRouteHours(formData.hours ?? DEFAULT_ROUTE_HOURS)
+  const progressPercent = Math.min(
+    100,
+    Math.max(0, ((hoursValue - MIN_ROUTE_HOURS) / (MAX_ROUTE_HOURS - MIN_ROUTE_HOURS)) * 100),
+  )
+
   return (
     <div className="space-y-10">
       <div className="text-center">
@@ -90,24 +102,24 @@ export default function StepDuration({ formData, updateFormData }: Props) {
               Или выберите точно
             </span>
             <span className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {formData.hours || 3}ч
+              {hoursValue}ч
             </span>
           </div>
           <input
             type="range"
-            min="0.5"
-            max="12"
+            min={MIN_ROUTE_HOURS}
+            max={MAX_ROUTE_HOURS}
             step="0.5"
-            value={formData.hours || 3}
-            onChange={(e) => updateFormData({ hours: parseFloat(e.target.value) })}
+            value={hoursValue}
+            onChange={(e) => updateFormData({ hours: sanitizeRouteHours(parseFloat(e.target.value)) })}
             className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-purple-600"
             style={{
-              background: `linear-gradient(to right, rgb(168 85 247) 0%, rgb(168 85 247) ${((formData.hours || 3) / 12) * 100}%, rgb(226 232 240) ${((formData.hours || 3) / 12) * 100}%, rgb(226 232 240) 100%)`
+              background: `linear-gradient(to right, rgb(168 85 247) 0%, rgb(168 85 247) ${progressPercent}%, rgb(226 232 240) ${progressPercent}%, rgb(226 232 240) 100%)`
             }}
           />
           <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mt-2">
             <span>30 мин</span>
-            <span>12 часов</span>
+            <span>8 часов</span>
           </div>
         </div>
       </div>

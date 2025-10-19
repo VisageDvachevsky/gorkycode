@@ -4,6 +4,12 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { api } from '../api/client'
 import type { RouteRequest, RouteResponse, Category, CoffeePreferences } from '../types'
+import {
+  DEFAULT_ROUTE_HOURS,
+  MAX_ROUTE_HOURS,
+  MIN_ROUTE_HOURS,
+  sanitizeRouteHours,
+} from '../constants/route'
 import 'leaflet/dist/leaflet.css'
 
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -43,7 +49,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
   
   const [formData, setFormData] = useState<RouteRequest>({
     interests: '',
-    hours: 3,
+    hours: DEFAULT_ROUTE_HOURS,
     social_mode: 'solo',
     intensity: 'medium',
     allow_transit: true,
@@ -74,7 +80,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     let progress = 0
     
     if (formData.interests.trim() || selectedCategories.length > 0) progress += 25
-    if (formData.hours) progress += 25
+    if (formData.hours >= MIN_ROUTE_HOURS && formData.hours <= MAX_ROUTE_HOURS) progress += 25
     if (locationType === 'address' ? formData.start_address : (formData.start_lat !== undefined && formData.start_lon !== undefined)) progress += 25
     progress += 25
     
@@ -111,6 +117,7 @@ export default function RouteForm({ onRouteGenerated }: Props) {
     
     const requestData: RouteRequest = {
       ...formData,
+      hours: sanitizeRouteHours(formData.hours),
       categories: selectedCategories.length > 0 ? selectedCategories : undefined,
       coffee_preferences: coffeePrefs.enabled ? coffeePrefs : undefined,
     }
@@ -222,14 +229,16 @@ export default function RouteForm({ onRouteGenerated }: Props) {
             <input
               type="number"
               value={formData.hours}
-              onChange={(e) => setFormData({ ...formData, hours: parseFloat(e.target.value) || 3 })}
-              min="0.5"
-              max="12"
+              onChange={(e) =>
+                setFormData({ ...formData, hours: sanitizeRouteHours(parseFloat(e.target.value)) })
+              }
+              min={MIN_ROUTE_HOURS}
+              max={MAX_ROUTE_HOURS}
               step="0.5"
               className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all hover:border-gray-300"
               required
             />
-            <span className="text-xs text-gray-500 mt-1 block">от 0.5 до 12 часов</span>
+             <span className="text-xs text-gray-500 mt-1 block">от 0.5 до 8 часов</span>
           </div>
 
           <div>

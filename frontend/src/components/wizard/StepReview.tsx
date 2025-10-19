@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Check, Clock, MapPin, Users, Zap, Coffee, Bus, Tag } from 'lucide-react'
 import type { RouteRequest, Category } from '../../types'
+import { DEFAULT_ROUTE_HOURS, sanitizeRouteHours } from '../../constants/route'
 
 interface Props {
   formData: Partial<RouteRequest>
@@ -9,6 +10,7 @@ interface Props {
 
 export default function StepReview({ formData, categories }: Props) {
   const selectedCategories = categories.filter(c => formData.categories?.includes(c.value))
+  const durationHours = sanitizeRouteHours(formData.hours ?? DEFAULT_ROUTE_HOURS)
 
   const getSocialModeLabel = (mode: string) => {
     const modes = {
@@ -108,7 +110,7 @@ export default function StepReview({ formData, categories }: Props) {
             <div className="flex items-center gap-2 text-sm">
               <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span className="text-slate-700 dark:text-slate-300">
-                Длительность: <strong>{formData.hours || 3} часа</strong>
+                Длительность: <strong>{durationHours} часа</strong>
               </span>
             </div>
             <div className="flex items-center gap-2 text-sm">

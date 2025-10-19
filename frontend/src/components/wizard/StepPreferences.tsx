@@ -248,7 +248,7 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
             <div className="flex items-center gap-2 mb-1">
               <Bus className={`w-5 h-5 ${formData.allow_transit ? 'text-green-600' : 'text-slate-600 dark:text-slate-400'}`} />
               <span className="font-bold text-slate-900 dark:text-white">
-                Использовать общественный транспорт
+                Использовать общественный транспорт (BETA)
               </span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400">

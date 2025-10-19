@@ -9,6 +9,12 @@ import StepDuration from './wizard/StepDuration'
 import StepLocation from './wizard/StepLocation'
 import StepPreferences from './wizard/StepPreferences'
 import StepReview from './wizard/StepReview'
+import {
+  DEFAULT_ROUTE_HOURS,
+  MAX_ROUTE_HOURS,
+  MIN_ROUTE_HOURS,
+  sanitizeRouteHours,
+} from '../constants/route'
 
 interface Props {
   onRouteGenerated: (route: RouteResponse) => void
@@ -31,7 +37,7 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
     social_mode: 'solo',
     intensity: 'medium',
     allow_transit: true,
-    hours: 3,
+    hours: DEFAULT_ROUTE_HOURS,
     client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   })
 
@@ -48,7 +54,15 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
   })
 
   const updateFormData = (updates: Partial<RouteRequest>) => {
-    setFormData(prev => ({ ...prev, ...updates }))
+    setFormData(prev => {
+      const next = { ...prev, ...updates }
+
+      if ('hours' in updates) {
+        next.hours = sanitizeRouteHours(updates.hours)
+      }
+
+      return next
+    })
   }
 
   const canProceed = () => {
@@ -56,7 +70,11 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
       case 'interests':
         return (formData.interests?.trim() || formData.categories?.length)
       case 'duration':
-        return formData.hours && formData.hours >= 0.5
+        return (
+          typeof formData.hours === 'number' &&
+          formData.hours >= MIN_ROUTE_HOURS &&
+          formData.hours <= MAX_ROUTE_HOURS
+        )
       case 'location':
         return formData.start_address || (formData.start_lat && formData.start_lon)
       case 'preferences':
@@ -82,7 +100,8 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
 
   const handleSubmit = () => {
     if (!canProceed()) return
-    mutation.mutate(formData as RouteRequest)
+    const safeHours = sanitizeRouteHours(formData.hours)
+    mutation.mutate({ ...formData, hours: safeHours } as RouteRequest)
   }
 
   const progress = ((currentStep + 1) / STEPS.length) * 100
