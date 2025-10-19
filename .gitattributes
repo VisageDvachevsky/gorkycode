@@ -1,2 +1,24 @@
-# Auto detect text files and perform LF normalization
+# Normalize all text files and keep scripts executable on Unix shells
 * text=auto
+
+# Force LF endings for tooling executed inside containers/WSL
+*.sh text eol=lf
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+Makefile text eol=lf
+*.mk text eol=lf
+
+# Allow native endings for Windows helper scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
