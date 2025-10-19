@@ -1,6 +1,21 @@
+import os
+import sys
+from pathlib import Path
+
+os.environ.setdefault("DATABASE_URL", "postgresql://user:password@localhost:5432/testdb")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("TWOGIS_API_KEY", "test-key")
+os.environ.setdefault("NAVITIA_API_KEY", "test-navitia-key")
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+BACKEND_DIR = ROOT_DIR / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.core.database import Base
 
 

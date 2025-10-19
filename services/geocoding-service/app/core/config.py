@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     GRPC_PORT: int = 50055
 
     TWOGIS_API_KEY: str = ""
+    REDIS_URL: str = "redis://redis:6379/0"
 
     # Nizhny Novgorod boundaries
     NN_LAT_MIN: float = 56.20

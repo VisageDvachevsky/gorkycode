@@ -49,8 +49,8 @@ class GeocodingService:
         """Check if coordinates are within Nizhny Novgorod bounds"""
         
         return (
-            self.NIZHNY_NOVGOROD_BOUNDS["lat_min"] <= lat <= self.NIZHNY_NOVGOROD_BOUNDS["lat_max"] and
-            self.NIZHNY_NOVGOROD_BOUNDS["lon_min"] <= lon <= self.NIZHNY_NOVGOROD_BOUNDS["lon_max"]
+            self.NIZHNY_NOVGOROD_BOUNDS["lat_min"] <= lat <= self.NIZHNY_NOVGOROD_BOUNDS["lat_max"]
+            and self.NIZHNY_NOVGOROD_BOUNDS["lon_min"] <= lon <= self.NIZHNY_NOVGOROD_BOUNDS["lon_max"]
         )
 
 
