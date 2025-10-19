@@ -91,39 +91,39 @@ logs:
 	@kubectl logs -n $(NAMESPACE) -l app=api-gateway -f --tail=50
 
 test:
-        @echo "$(YELLOW)Testing API endpoints...$(NC)"
-        @sleep 10
-        @echo ""
-        @echo "$(YELLOW)1. Testing health endpoint...$(NC)"
-        @kubectl delete pod/test-health -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @kubectl run test-health --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
-                sh -c "curl -s http://ai-tourist-api-gateway:8000/health" >/dev/null
-        @kubectl wait --for=condition=PodScheduled pod/test-health -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @kubectl wait --for=condition=Ready pod/test-health -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @sleep 2
-        @kubectl logs -n $(NAMESPACE) test-health | jq . || echo "Health check failed"
-        @kubectl delete pod/test-health -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @echo ""
-        @echo "$(YELLOW)2. Testing readiness endpoint...$(NC)"
-        @kubectl delete pod/test-ready -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @kubectl run test-ready --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
-                sh -c "curl -s http://ai-tourist-api-gateway:8000/ready" >/dev/null
-        @kubectl wait --for=condition=PodScheduled pod/test-ready -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @kubectl wait --for=condition=Ready pod/test-ready -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @sleep 2
-        @kubectl logs -n $(NAMESPACE) test-ready | jq . || echo "Readiness check failed"
-        @kubectl delete pod/test-ready -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @echo ""
-        @echo "$(YELLOW)3. Testing categories endpoint...$(NC)"
-        @kubectl delete pod/test-categories -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @kubectl run test-categories --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
-                sh -c "curl -s http://ai-tourist-api-gateway:8000/api/v1/categories/list" >/dev/null
-        @kubectl wait --for=condition=PodScheduled pod/test-categories -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @kubectl wait --for=condition=Ready pod/test-categories -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
-        @sleep 2
-        @kubectl logs -n $(NAMESPACE) test-categories | jq . || echo "Categories failed"
-        @kubectl delete pod/test-categories -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
-        @echo "$(GREEN)✅ Tests complete$(NC)"
+	@echo "$(YELLOW)Testing API endpoints...$(NC)"
+	@sleep 10
+	@echo ""
+	@echo "$(YELLOW)1. Testing health endpoint...$(NC)"
+	@kubectl delete pod/test-health -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@kubectl run test-health --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
+		sh -c "curl -s http://ai-tourist-api-gateway:8000/health" >/dev/null
+	@kubectl wait --for=condition=PodScheduled pod/test-health -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@kubectl wait --for=condition=Ready pod/test-health -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@sleep 2
+	@kubectl logs -n $(NAMESPACE) test-health | jq . || echo "Health check failed"
+	@kubectl delete pod/test-health -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@echo ""
+	@echo "$(YELLOW)2. Testing readiness endpoint...$(NC)"
+	@kubectl delete pod/test-ready -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@kubectl run test-ready --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
+		sh -c "curl -s http://ai-tourist-api-gateway:8000/ready" >/dev/null
+	@kubectl wait --for=condition=PodScheduled pod/test-ready -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@kubectl wait --for=condition=Ready pod/test-ready -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@sleep 2
+	@kubectl logs -n $(NAMESPACE) test-ready | jq . || echo "Readiness check failed"
+	@kubectl delete pod/test-ready -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@echo ""
+	@echo "$(YELLOW)3. Testing categories endpoint...$(NC)"
+	@kubectl delete pod/test-categories -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@kubectl run test-categories --restart=Never --image=curlimages/curl -n $(NAMESPACE) --command -- \
+		sh -c "curl -s http://ai-tourist-api-gateway:8000/api/v1/categories/list" >/dev/null
+	@kubectl wait --for=condition=PodScheduled pod/test-categories -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@kubectl wait --for=condition=Ready pod/test-categories -n $(NAMESPACE) --timeout=20s >/dev/null 2>&1 || true
+	@sleep 2
+	@kubectl logs -n $(NAMESPACE) test-categories | jq . || echo "Categories failed"
+	@kubectl delete pod/test-categories -n $(NAMESPACE) --ignore-not-found >/dev/null 2>&1 || true
+	@echo "$(GREEN)✅ Tests complete$(NC)"
 
 clean:
 	@echo "$(RED)Cleaning up...$(NC)"
@@ -142,9 +142,9 @@ help:
 	@echo "  $(YELLOW)make test$(NC)         - Run API tests"
 	@echo "  $(YELLOW)make status$(NC)       - Show pod/service status"
 	@echo "  $(YELLOW)make logs$(NC)         - Show API Gateway logs"
-        @echo "  $(YELLOW)make show-url$(NC)     - Show access URLs"
-        @echo "  $(YELLOW)make port-forward$(NC) - Expose services on localhost (helpful for WSL/Windows)"
-        @echo "  $(YELLOW)make open$(NC)         - Open in browser (Linux/WSL)"
+		@echo "  $(YELLOW)make show-url$(NC)     - Show access URLs"
+		@echo "  $(YELLOW)make port-forward$(NC) - Expose services on localhost (helpful for WSL/Windows)"
+		@echo "  $(YELLOW)make open$(NC)         - Open in browser (Linux/WSL)"
 	@echo "  $(YELLOW)make clean$(NC)        - Remove deployment"
 	@echo "  $(YELLOW)make restart$(NC)      - Clean + Build + Deploy"
 	@echo ""
