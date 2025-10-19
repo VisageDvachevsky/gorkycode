@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-postgres-pvc
+  namespace: {{ .Release.Namespace }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-postgresql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: postgresql
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          value: {{ .Values.postgresql.auth.database | quote }}
+        - name: POSTGRES_USER
+          value: {{ .Values.postgresql.auth.username | quote }}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.secrets.dbPassword | quote }}
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "{{ .Values.postgresql.auth.username }}"]
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: {{ include "ai-tourist.fullname" . }}-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-postgresql
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: postgres
+  selector:
+    app: postgresql
