@@ -1,4 +1,3 @@
-{{- if .Values.postgresql.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -88,4 +87,3 @@ spec:
       - name: migration-sql
         configMap:
           name: {{ include "ai-tourist.fullname" . }}-db-migration-sql
-{{- end }}

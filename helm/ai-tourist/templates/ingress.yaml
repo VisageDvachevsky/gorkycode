@@ -7,10 +7,14 @@ metadata:
     {{- include "ai-tourist.labels" . | nindent 4 }}
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-  - http:
+  - host: {{ .Values.ingress.host | default "ai-tourist.local" }}
+    http:
       paths:
       - path: /api(/|$)(.*)
         pathType: ImplementationSpecific
@@ -19,8 +23,8 @@ spec:
             name: {{ include "ai-tourist.fullname" . }}-api-gateway
             port:
               number: {{ .Values.apiGateway.service.port }}
-      - path: /
-        pathType: Prefix
+      - path: /()(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: {{ include "ai-tourist.fullname" . }}-frontend

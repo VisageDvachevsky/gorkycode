@@ -2,21 +2,12 @@ import axios from 'axios'
 import type { RouteRequest, RouteResponse, Category } from '../types'
 
 const getApiUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_URL
-  
-  if (envUrl) {
-    return envUrl
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
   }
   
-  if (typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location
-    const isDevPort = port === '5173' || port === '3000'
-    
-    if (isDevPort) {
-      return 'http://localhost:8000'
-    }
-    
-    return `${protocol}//${hostname}${port ? `:${port}` : ''}`
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8000'
   }
   
   return ''
