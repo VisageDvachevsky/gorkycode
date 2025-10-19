@@ -1,72 +1,102 @@
+#!/usr/bin/env python3
+"""
+POI Data Loader
+Loads POI data from data/poi.json into PostgreSQL database
+"""
 import json
 import asyncio
 import asyncpg
 import os
+import sys
+
 
 async def load_pois():
-    poi_file = os.environ.get('POI_FILE', 'data/poi.json')
+    """Load POI data from JSON file into database"""
     
-    print(f"Reading {poi_file}...")
-    with open(poi_file, 'r', encoding='utf-8') as f:
-        pois = json.load(f)
+    # Read POI data
+    print("Reading data/poi.json...")
+    try:
+        with open('./data/poi.json', 'r', encoding='utf-8') as f:
+            pois = json.load(f)
+    except FileNotFoundError:
+        print("❌ Error: data/poi.json not found")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"❌ Error parsing JSON: {e}")
+        sys.exit(1)
     
-    print(f"Connecting to database...")
-    conn = await asyncpg.connect(
-        host='localhost',
-        port=5432,
-        user='aitourist',
-        password=os.environ['DB_PASSWORD'],
-        database='aitourist_db'
+    print(f"Found {len(pois)} POIs")
+    
+    # Get database connection string
+    database_url = os.environ.get(
+        'DATABASE_URL',
+        'postgresql://aitourist:secure_password_change_in_prod@localhost:5432/aitourist_db'
     )
     
+    # Connect to database
+    print("Connecting to database...")
     try:
-        existing = await conn.fetchval('SELECT COUNT(*) FROM pois')
-        print(f"Current POIs in database: {existing}")
+        conn = await asyncpg.connect(database_url)
+    except Exception as e:
+        print(f"❌ Database connection failed: {e}")
+        sys.exit(1)
+    
+    try:
+        # Check if table exists
+        table_exists = await conn.fetchval(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'pois')"
+        )
         
-        if existing > 0:
-            print("Clearing existing POIs...")
-            await conn.execute('DELETE FROM pois')
+        if not table_exists:
+            print("❌ Error: pois table does not exist. Run database migrations first.")
+            sys.exit(1)
         
-        loaded = 0
-        for i, poi in enumerate(pois, 1):
+        # Clear existing data
+        print("Clearing existing POI data...")
+        await conn.execute('TRUNCATE TABLE pois RESTART IDENTITY CASCADE')
+        
+        # Insert POIs
+        print("Inserting POIs...")
+        inserted = 0
+        
+        for poi in pois:
             try:
                 await conn.execute('''
-                    INSERT INTO pois (id, name, lat, lon, category, tags, description, 
-                                      avg_visit_minutes, rating, social_mode, intensity_level,
-                                      local_tip, photo_tip, address)
-                    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14)
+                    INSERT INTO pois (
+                        name, lat, lon, category, description, rating,
+                        avg_visit_minutes, address, tags, social_mode,
+                        intensity_level, photo_tip, local_tip
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ''',
-                    poi.get('id', i),
-                    poi['name'],
-                    poi['lat'],
-                    poi['lon'],
-                    poi['category'],
-                    json.dumps(poi.get('tags', [])),
+                    poi.get('name', 'Unknown'),
+                    poi.get('lat', 0.0),
+                    poi.get('lon', 0.0),
+                    poi.get('category', 'other'),
                     poi.get('description', ''),
-                    poi.get('avg_visit_minutes', 30),
                     poi.get('rating', 0.0),
+                    poi.get('avg_visit_minutes', 30),
+                    poi.get('address', ''),
+                    poi.get('tags', []),
                     poi.get('social_mode', 'any'),
                     poi.get('intensity_level', 'medium'),
-                    poi.get('local_tip', ''),
                     poi.get('photo_tip', ''),
-                    poi.get('address', '')
+                    poi.get('local_tip', '')
                 )
-                loaded += 1
-                if i % 50 == 0:
-                    print(f"  Loaded {i}/{len(pois)} POIs...")
+                inserted += 1
             except Exception as e:
-                print(f"  Warning: Failed to load POI #{poi.get('id', i)} {poi.get('name', 'unknown')}: {e}")
+                print(f"⚠ Warning: Failed to insert POI '{poi.get('name', 'unknown')}': {e}")
         
-        max_id = await conn.fetchval('SELECT MAX(id) FROM pois')
-        if max_id:
-            await conn.execute(f"SELECT setval('pois_id_seq', {max_id})")
+        # Verify count
+        count = await conn.fetchval('SELECT COUNT(*) FROM pois')
         
-        total = await conn.fetchval('SELECT COUNT(*) FROM pois')
-        print(f"✅ Successfully loaded {loaded} POIs")
-        print(f"📊 Total POIs in database: {total}")
+        print(f"✅ Successfully loaded {count} POIs (inserted: {inserted})")
         
+    except Exception as e:
+        print(f"❌ Error during data load: {e}")
+        sys.exit(1)
     finally:
         await conn.close()
+
 
 if __name__ == '__main__':
     asyncio.run(load_pois())
