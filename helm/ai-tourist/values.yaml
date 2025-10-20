@@ -20,9 +20,13 @@ llm:
 frontend:
   name: "frontend"
   replicas: 2
-  image: "ai-tourist-frontend"
-  tag: "latest"
-  port: 80
+  image:
+    repository: "ai-tourist-frontend"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
   resources:
     requests:
       memory: "128Mi"
@@ -35,9 +39,13 @@ frontend:
 apiGateway:
   name: "api-gateway"
   replicas: 2
-  image: "ai-tourist-api-gateway"
-  tag: "latest"
-  port: 8000
+  image:
+    repository: "ai-tourist-api-gateway"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
   metricsPort: 9090
   resources:
     requests:
@@ -51,9 +59,13 @@ apiGateway:
 embeddingService:
   name: "embedding-service"
   replicas: 2
-  image: "ai-tourist-embedding-service"
-  tag: "latest"
-  port: 50051
+  image:
+    repository: "ai-tourist-embedding-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50051
   metricsPort: 9090
   batchSize: 32
   model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -69,9 +81,13 @@ embeddingService:
 rankingService:
   name: "ranking-service"
   replicas: 2
-  image: "ai-tourist-ranking-service"
-  tag: "latest"
-  port: 50052
+  image:
+    repository: "ai-tourist-ranking-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50052
   metricsPort: 9090
   resources:
     requests:
@@ -85,9 +101,13 @@ rankingService:
 routePlannerService:
   name: "route-planner-service"
   replicas: 2
-  image: "ai-tourist-route-planner-service"
-  tag: "latest"
-  port: 50053
+  image:
+    repository: "ai-tourist-route-planner-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50053
   metricsPort: 9090
   resources:
     requests:
@@ -101,9 +121,13 @@ routePlannerService:
 llmService:
   name: "llm-service"
   replicas: 1
-  image: "ai-tourist-llm-service"
-  tag: "latest"
-  port: 50054
+  image:
+    repository: "ai-tourist-llm-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50054
   metricsPort: 9090
   resources:
     requests:
@@ -117,9 +141,13 @@ llmService:
 geocodingService:
   name: "geocoding-service"
   replicas: 1
-  image: "ai-tourist-geocoding-service"
-  tag: "latest"
-  port: 50055
+  image:
+    repository: "ai-tourist-geocoding-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50055
   metricsPort: 9090
   resources:
     requests:
@@ -133,9 +161,13 @@ geocodingService:
 poiService:
   name: "poi-service"
   replicas: 1
-  image: "ai-tourist-poi-service"
-  tag: "latest"
-  port: 50056
+  image:
+    repository: "ai-tourist-poi-service"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 50056
   metricsPort: 9090
   resources:
     requests:
@@ -148,11 +180,14 @@ poiService:
 # PostgreSQL
 postgresql:
   enabled: true
-  username: "aitourist"
-  password: "secure_password_change_in_prod"
-  database: "aitourist_db"
   port: 5432
-  image: "postgres:16-alpine"
+  image:
+    repository: "postgres"
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    username: "aitourist"
+    database: "aitourist_db"
   persistence:
     enabled: true
     size: 1Gi
@@ -168,7 +203,10 @@ postgresql:
 redis:
   enabled: true
   port: 6379
-  image: "redis:7-alpine"
+  image:
+    repository: "redis"
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
   persistence:
     enabled: true
     size: 1Gi
