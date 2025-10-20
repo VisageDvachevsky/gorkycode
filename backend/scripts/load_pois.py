@@ -1,36 +1,35 @@
 import asyncio
-import json
+import sys
 from pathlib import Path
 from sqlalchemy import select
 from app.core.database import async_session_maker, init_db
 from app.models.poi import POI
 from app.services.embedding import embedding_service
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from poi_loader_utils import PoiDataError, load_poi_data, resolve_poi_json_path
+
 
 async def load_pois():
     await init_db()
     await embedding_service.connect_redis()
     
-    possible_paths = [
-        Path("/app/data/poi.json"),
-        Path(__file__).parent.parent.parent / "data" / "poi.json",
-    ]
-    
-    data_path = None
-    for path in possible_paths:
-        if path.exists():
-            data_path = path
-            break
-    
-    if not data_path:
-        print("❌ Error: poi.json not found in any expected location")
-        print("Tried:", [str(p) for p in possible_paths])
+    try:
+        data_path = resolve_poi_json_path()
+        pois_data = load_poi_data(data_path)
+    except PoiDataError as exc:
+        print(f"❌ {exc}")
+        if exc.checked:
+            print("   Checked paths:")
+            for candidate in exc.checked:
+                print(f"     - {candidate}")
         return
-    
+
     print(f"📂 Loading POI data from: {data_path}")
-    
-    with open(data_path, "r", encoding="utf-8") as f:
-        pois_data = json.load(f)
     
     async with async_session_maker() as session:
         result = await session.execute(select(POI))

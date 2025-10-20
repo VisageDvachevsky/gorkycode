@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""
-Load POI data from JSON into PostgreSQL for POI Service
-Usage: python load_pois_microservice.py
-"""
+"""Load POI data from JSON into PostgreSQL for POI Service."""
 import asyncio
-import json
 import sys
 from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 import os
-import httpx
 from sentence_transformers import SentenceTransformer
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from poi_loader_utils import PoiDataError, load_poi_data, resolve_poi_json_path
 
 
 DATABASE_URL = os.getenv(
@@ -65,29 +67,18 @@ async def load_pois():
     """Load POIs from JSON with embeddings"""
     print("🚀 Starting POI data load...")
     
-    possible_paths = [
-        Path("/app/data/poi.json"),
-        Path(__file__).parent.parent / "data" / "poi.json",
-        Path("../data/poi.json"),
-        Path("data/poi.json"),
-    ]
-    
-    data_path = None
-    for path in possible_paths:
-        if path.exists():
-            data_path = path
-            break
-    
-    if not data_path:
-        print("❌ Error: poi.json not found in any expected location")
-        print("Tried:", [str(p) for p in possible_paths])
+    try:
+        data_path = resolve_poi_json_path()
+        pois_data = load_poi_data(data_path)
+    except PoiDataError as exc:
+        print(f"❌ {exc}")
+        if exc.checked:
+            print("   Checked paths:")
+            for candidate in exc.checked:
+                print(f"     - {candidate}")
         sys.exit(1)
-    
+
     print(f"📂 Loading POI data from: {data_path}")
-    
-    with open(data_path, "r", encoding="utf-8") as f:
-        pois_data = json.load(f)
-    
     print(f"Found {len(pois_data)} POIs in JSON")
     
     print("Loading embedding model...")

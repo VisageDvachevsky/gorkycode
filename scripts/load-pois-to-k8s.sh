@@ -30,7 +30,7 @@ fi
 
 echo "⚡ Loading POIs..."
 export DB_PASSWORD="$DB_PASSWORD"
-export POI_FILE="$POI_FILE"
+export POI_JSON_PATH="$POI_FILE"
 python3 scripts/load_pois.py
 
 kill $PF_PID 2>/dev/null || true
