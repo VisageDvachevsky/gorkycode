@@ -17,3 +17,4 @@ helm/*/values-dev.yaml
 .env
 /.venv
 /frontend/dist
+helm/ai-tourist/values.yaml
