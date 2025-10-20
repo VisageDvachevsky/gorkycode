@@ -14,13 +14,6 @@ COPY services/poi-service/pyproject.toml services/poi-service/poetry.lock* ./
 RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-root --no-interaction --no-ansi
 
-RUN pip install grpcio-tools sentence-transformers
-
-# Pre-download embedding model so runtime jobs don't hit the network
-ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
-RUN mkdir -p "${SENTENCE_TRANSFORMERS_HOME}" \
-    && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
-
 FROM base AS production
 
 WORKDIR /app

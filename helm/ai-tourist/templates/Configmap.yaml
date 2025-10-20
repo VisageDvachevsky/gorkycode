@@ -19,7 +19,7 @@ data:
   POI_SERVICE_URL: "{{ include "ai-tourist.fullname" . }}-poi-service:{{ .Values.poiService.service.port }}"
   
   # ML Models
-  EMBEDDING_MODEL: {{ .Values.ml.embeddingModel | quote }}
+  EMBEDDING_MODEL: {{ .Values.embeddingService.model | quote }}
   
   # LLM Configuration
   LLM_PROVIDER: {{ .Values.llm.provider | quote }}
