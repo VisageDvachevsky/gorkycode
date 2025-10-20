@@ -82,7 +82,15 @@ async def load_pois():
     print(f"Found {len(pois_data)} POIs in JSON")
     
     print("Loading embedding model...")
-    model = SentenceTransformer(EMBEDDING_MODEL)
+    try:
+        model = SentenceTransformer(EMBEDDING_MODEL)
+    except OSError as exc:
+        cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
+        print("❌ Failed to load embedding model:", exc)
+        print("   The container image must include the model weights or network access to download them.")
+        print(f"   Checked cache directory: {cache_dir}")
+        print("   Rebuild the poi-service image (make build) to pre-download the model or mount it at runtime.")
+        sys.exit(1)
     print(f"✓ Loaded {EMBEDDING_MODEL}")
     
     engine = create_async_engine(
