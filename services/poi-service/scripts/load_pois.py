@@ -8,21 +8,21 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Hugging Face recently introduced an accelerated download client backed by XetHub.
-# In restricted clusters this client can receive HTTP 500 responses which prevents
-# the model from being fetched even when the standard Hugging Face CDN is available.
-# Disabling it falls back to the resilient HTTP client.  Allow operators to
-# override this behaviour via environment variable, but default to the safe mode.
-os.environ.setdefault("HF_HUB_DISABLE_HF_TRANSFER", "1")
-
-from sentence_transformers import SentenceTransformer
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+APP_PROTO_DIR = REPO_ROOT / "services" / "poi-service" / "app" / "proto"
+if str(APP_PROTO_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_PROTO_DIR))
+
 from poi_loader_utils import PoiDataError, load_poi_data, resolve_poi_json_path
+
+import grpc
+
+from embedding_pb2 import BatchEmbeddingRequest
+from embedding_pb2_grpc import EmbeddingServiceStub
 
 
 DATABASE_URL = os.getenv(
@@ -30,8 +30,13 @@ DATABASE_URL = os.getenv(
     "postgresql+asyncpg://gorkycode:gorkycode_pass@localhost:5432/gorkycode"
 )
 
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+EMBEDDING_SERVICE_ADDR = os.getenv("EMBEDDING_SERVICE_ADDR", "localhost:50051")
+EMBEDDING_BATCH_SIZE = max(1, int(os.getenv("EMBEDDING_BATCH_SIZE", "16")))
+EMBEDDING_TIMEOUT = float(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "30"))
+EMBEDDING_USE_CACHE = os.getenv("EMBEDDING_USE_CACHE", "1").lower() not in {"0", "false", "no"}
 
+
+from typing import Sequence
 
 from sqlalchemy import Column, Integer, String, Float, Text, Time
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -65,6 +70,64 @@ class POI(Base):
     embedding = Column(ARRAY(Float))
 
 
+class EmbeddingClient:
+    """Thin async wrapper around the embedding-service gRPC API."""
+
+    def __init__(self, target: str, *, use_cache: bool, timeout: float):
+        self._target = target
+        self._use_cache = use_cache
+        self._timeout = timeout
+        self._channel: grpc.aio.Channel | None = None
+        self._stub: EmbeddingServiceStub | None = None
+
+    async def connect(self) -> None:
+        """Establish the gRPC channel and wait until it is ready."""
+
+        self._channel = grpc.aio.insecure_channel(self._target)
+        await self._channel.channel_ready()
+        self._stub = EmbeddingServiceStub(self._channel)
+
+    async def close(self) -> None:
+        """Close the underlying gRPC channel."""
+
+        if self._channel is not None:
+            await self._channel.close()
+            self._channel = None
+            self._stub = None
+
+    async def embed_batch(self, texts: Sequence[str]) -> list[list[float]]:
+        """Request embeddings for a batch of texts."""
+
+        if not texts:
+            return []
+
+        if self._stub is None:
+            raise RuntimeError("Embedding client is not connected")
+
+        request = BatchEmbeddingRequest(texts=list(texts), use_cache=self._use_cache)
+        response = await self._stub.BatchEmbedding(request, timeout=self._timeout)
+        vectors = [list(vector.vector) for vector in response.vectors]
+
+        if len(vectors) != len(texts):
+            raise RuntimeError(
+                f"Embedding service returned {len(vectors)} vectors for {len(texts)} texts"
+            )
+
+        return vectors
+
+
+async def _create_embedding_client() -> EmbeddingClient:
+    """Instantiate and connect the embedding client."""
+
+    client = EmbeddingClient(
+        EMBEDDING_SERVICE_ADDR,
+        use_cache=EMBEDDING_USE_CACHE,
+        timeout=EMBEDDING_TIMEOUT,
+    )
+    await client.connect()
+    return client
+
+
 async def init_db(engine):
     """Initialize database schema"""
     async with engine.begin() as conn:
@@ -90,21 +153,17 @@ async def load_pois():
     print(f"📂 Loading POI data from: {data_path}")
     print(f"Found {len(pois_data)} POIs in JSON")
     
-    print("Loading embedding model...")
+    print(f"🔌 Connecting to embedding service at {EMBEDDING_SERVICE_ADDR} ...")
+
     try:
-        model = SentenceTransformer(EMBEDDING_MODEL)
-    except Exception as exc:  # pragma: no cover - defensive path for ops issues
-        cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
-        print("❌ Failed to load embedding model:", exc)
-        print("   Ensure the model weights are available locally or that outbound network access is allowed.")
-        print("   The loader now defaults to the standard Hugging Face HTTP client (HF_TRANSFER disabled).")
-        print(f"   Checked cache directory: {cache_dir}")
-        print(
-            "   Rebuild the poi-service image (make build) to pre-download the model, "
-            "provide EMBEDDING_MODEL_PATH, or mount the weights at runtime."
-        )
+        embedding_client = await _create_embedding_client()
+    except Exception as exc:  # pragma: no cover - operational safeguard
+        print("❌ Failed to connect to embedding service:", exc)
+        print("   Ensure the embedding-service deployment is running and accessible.")
+        print("   You can override the address via EMBEDDING_SERVICE_ADDR.")
         sys.exit(1)
-    print(f"✓ Loaded {EMBEDDING_MODEL}")
+
+    print("✓ Embedding service connection established")
     
     engine = create_async_engine(
         DATABASE_URL,
@@ -127,32 +186,45 @@ async def load_pois():
         added_count = 0
         updated_count = 0
         
-        for poi_data in pois_data:
-            poi_id = poi_data["id"]
-            
-            embedding_text = f"{poi_data['name']} {poi_data['description']} {' '.join(poi_data.get('tags', []))}"
-            embedding = model.encode(embedding_text).tolist()
-            
-            if poi_id in existing_pois:
-                poi = existing_pois[poi_id]
-                for key, value in poi_data.items():
-                    if key != "id" and hasattr(poi, key):
-                        setattr(poi, key, value)
-                poi.embedding = embedding
-                updated_count += 1
-                print(f"  ✓ Updated: {poi.name}")
-            else:
-                poi = POI(**poi_data, embedding=embedding)
-                session.add(poi)
-                added_count += 1
-                print(f"  ✓ Added: {poi.name}")
-        
+        for batch_start in range(0, len(pois_data), EMBEDDING_BATCH_SIZE):
+            batch = pois_data[batch_start: batch_start + EMBEDDING_BATCH_SIZE]
+            batch_texts = [
+                f"{poi['name']} {poi.get('description', '')} {' '.join(poi.get('tags', []))}"
+                for poi in batch
+            ]
+
+            try:
+                embeddings = await embedding_client.embed_batch(batch_texts)
+            except Exception as exc:  # pragma: no cover - operational safeguard
+                print("❌ Failed to generate embeddings:", exc)
+                print("   Verify embedding-service logs for more details.")
+                await embedding_client.close()
+                sys.exit(1)
+
+            for poi_data, embedding in zip(batch, embeddings):
+                poi_id = poi_data["id"]
+
+                if poi_id in existing_pois:
+                    poi = existing_pois[poi_id]
+                    for key, value in poi_data.items():
+                        if key != "id" and hasattr(poi, key):
+                            setattr(poi, key, value)
+                    poi.embedding = embedding
+                    updated_count += 1
+                    print(f"  ✓ Updated: {poi.name}")
+                else:
+                    poi = POI(**poi_data, embedding=embedding)
+                    session.add(poi)
+                    added_count += 1
+                    print(f"  ✓ Added: {poi.name}")
+
         await session.commit()
         print(f"\n✅ POI Load Complete!")
         print(f"   Added: {added_count}")
         print(f"   Updated: {updated_count}")
         print(f"   Total: {len(pois_data)}")
-    
+
+    await embedding_client.close()
     await engine.dispose()
 
 

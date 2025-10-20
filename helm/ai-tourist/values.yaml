@@ -55,6 +55,7 @@ embeddingService:
   tag: "latest"
   port: 50051
   metricsPort: 9090
+  batchSize: 32
   model: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
   resources:
     requests:
