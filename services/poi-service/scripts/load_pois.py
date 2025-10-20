@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """Load POI data from JSON into PostgreSQL for POI Service."""
 import asyncio
+import os
 import sys
 from pathlib import Path
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-import os
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+# Hugging Face recently introduced an accelerated download client backed by XetHub.
+# In restricted clusters this client can receive HTTP 500 responses which prevents
+# the model from being fetched even when the standard Hugging Face CDN is available.
+# Disabling it falls back to the resilient HTTP client.  Allow operators to
+# override this behaviour via environment variable, but default to the safe mode.
+os.environ.setdefault("HF_HUB_DISABLE_HF_TRANSFER", "1")
+
 from sentence_transformers import SentenceTransformer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -84,12 +93,16 @@ async def load_pois():
     print("Loading embedding model...")
     try:
         model = SentenceTransformer(EMBEDDING_MODEL)
-    except OSError as exc:
+    except Exception as exc:  # pragma: no cover - defensive path for ops issues
         cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
         print("❌ Failed to load embedding model:", exc)
-        print("   The container image must include the model weights or network access to download them.")
+        print("   Ensure the model weights are available locally or that outbound network access is allowed.")
+        print("   The loader now defaults to the standard Hugging Face HTTP client (HF_TRANSFER disabled).")
         print(f"   Checked cache directory: {cache_dir}")
-        print("   Rebuild the poi-service image (make build) to pre-download the model or mount it at runtime.")
+        print(
+            "   Rebuild the poi-service image (make build) to pre-download the model, "
+            "provide EMBEDDING_MODEL_PATH, or mount the weights at runtime."
+        )
         sys.exit(1)
     print(f"✓ Loaded {EMBEDDING_MODEL}")
     

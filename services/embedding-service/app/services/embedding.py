@@ -1,10 +1,16 @@
-import logging
 import hashlib
+import logging
+import os
 import pickle
 from typing import List
 
 import grpc
 import redis.asyncio as aioredis
+
+# See services/poi-service/scripts/load_pois.py for context on disabling the
+# accelerated HF transfer backend by default.
+os.environ.setdefault("HF_HUB_DISABLE_HF_TRANSFER", "1")
+
 from sentence_transformers import SentenceTransformer
 
 from app.proto import embedding_pb2, embedding_pb2_grpc
@@ -21,7 +27,18 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
     async def initialize(self):
         """Initialize model and Redis"""
         logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
-        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        try:
+            self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        except Exception as exc:  # pragma: no cover - operational safeguard
+            cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
+            logger.error(
+                "Failed to load embedding model '%s': %s", settings.EMBEDDING_MODEL, exc
+            )
+            logger.error(
+                "Ensure the weights are baked into the container (cache dir: %s) or allow outbound network access.",
+                cache_dir,
+            )
+            raise
         logger.info(f"✓ Model loaded (dim={self.model.get_sentence_embedding_dimension()})")
         
         logger.info(f"Connecting to Redis at {settings.REDIS_URL}")

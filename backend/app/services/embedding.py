@@ -1,16 +1,37 @@
 import hashlib
 import json
+import logging
+import os
 from typing import List, Optional
+
 import numpy as np
-from sentence_transformers import SentenceTransformer
 import redis.asyncio as redis
+
+# See services/poi-service/scripts/load_pois.py for context.  The accelerated
+# Hugging Face transfer backend occasionally fails inside restricted clusters,
+# so we disable it by default for deterministic startup behaviour.
+os.environ.setdefault("HF_HUB_DISABLE_HF_TRANSFER", "1")
+
+from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
 
 
 class EmbeddingService:
     def __init__(self):
-        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        self.logger = logging.getLogger(__name__)
+        try:
+            self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
+        except Exception as exc:  # pragma: no cover - operational safeguard
+            cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
+            self.logger.error(
+                "Failed to load embedding model '%s': %s", settings.EMBEDDING_MODEL, exc
+            )
+            self.logger.error(
+                "Ensure the model weights exist in the container cache (%s) or enable network access.",
+                cache_dir,
+            )
+            raise
         self.redis_client: Optional[redis.Redis] = None
         
     async def connect_redis(self):
