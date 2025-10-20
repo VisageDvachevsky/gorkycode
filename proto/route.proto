@@ -27,6 +27,9 @@ message RouteOptimizationResponse {
   repeated POIInfo optimized_route = 1;
   double total_distance_km = 2;
   int32 total_minutes = 3;
+  repeated RouteLeg legs = 4;
+  double total_walking_distance_km = 5;
+  double total_transit_distance_km = 6;
 }
 
 message RouteGeometryRequest {
@@ -38,6 +41,45 @@ message RouteGeometryRequest {
 message Coordinate {
   double lat = 1;
   double lon = 2;
+}
+
+message LegManeuver {
+  string instruction = 1;
+  string street_name = 2;
+  double distance_m = 3;
+  double duration_sec = 4;
+}
+
+message TransitStop {
+  string name = 1;
+  string side = 2;
+  Coordinate position = 3;
+}
+
+message TransitLegDetails {
+  string provider = 1;
+  string line_name = 2;
+  string vehicle_type = 3;
+  string direction = 4;
+  string vehicle_number = 5;
+  string summary = 6;
+  TransitStop boarding = 7;
+  TransitStop alighting = 8;
+  string departure_time = 9;
+  string arrival_time = 10;
+  string notes = 11;
+  double walk_to_board_meters = 12;
+  double walk_from_alight_meters = 13;
+}
+
+message RouteLeg {
+  Coordinate start = 1;
+  Coordinate end = 2;
+  double distance_km = 3;
+  double duration_minutes = 4;
+  string mode = 5;
+  repeated LegManeuver maneuvers = 6;
+  TransitLegDetails transit = 7;
 }
 
 message RouteGeometryResponse {

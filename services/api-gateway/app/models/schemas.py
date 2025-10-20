@@ -89,6 +89,50 @@ class POIInRoute(BaseModel):
     opening_hours: Optional[str] = None
 
 
+class CoordinatePoint(BaseModel):
+    lat: float
+    lon: float
+
+
+class ManeuverInstruction(BaseModel):
+    text: str
+    street_name: Optional[str] = None
+    distance_m: Optional[float] = None
+    duration_sec: Optional[float] = None
+
+
+class TransitStopInfo(BaseModel):
+    name: str
+    side: Optional[str] = None
+    position: Optional[CoordinatePoint] = None
+
+
+class TransitGuidance(BaseModel):
+    provider: Optional[str] = None
+    line_name: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    direction: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    summary: Optional[str] = None
+    boarding: Optional[TransitStopInfo] = None
+    alighting: Optional[TransitStopInfo] = None
+    departure_time: Optional[str] = None
+    arrival_time: Optional[str] = None
+    notes: Optional[str] = None
+    walk_to_board_meters: Optional[float] = None
+    walk_from_alight_meters: Optional[float] = None
+
+
+class RouteLegInstruction(BaseModel):
+    mode: Literal["walking", "transit", "mixed"]
+    start: CoordinatePoint
+    end: CoordinatePoint
+    distance_km: float
+    duration_minutes: float
+    maneuvers: List[ManeuverInstruction] = Field(default_factory=list)
+    transit: Optional[TransitGuidance] = None
+
+
 class RouteResponse(BaseModel):
     summary: str
     route: List[POIInRoute]
@@ -99,3 +143,6 @@ class RouteResponse(BaseModel):
     route_geometry: List[List[float]] = Field(default_factory=list)
     start_time_used: Optional[datetime] = None
     time_warnings: List[str] = Field(default_factory=list)
+    movement_legs: List[RouteLegInstruction] = Field(default_factory=list)
+    walking_distance_km: float = 0.0
+    transit_distance_km: float = 0.0
