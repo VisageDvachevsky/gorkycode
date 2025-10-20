@@ -6,77 +6,18 @@ metadata:
   labels:
     {{- include "ai-tourist.labels" . | nindent 4 }}
 data:
-  load_pois.py: |
-    import json
-    import asyncio
-    import asyncpg
-    import os
-
-    async def load_pois():
-        db_url = os.environ.get('DATABASE_URL')
-
-        print("Connecting to database...")
-        print(f"Using DATABASE_URL: {db_url}")
-        conn = await asyncpg.connect(db_url)
-
-        try:
-            # Check if POIs already loaded
-            count = await conn.fetchval('SELECT COUNT(*) FROM pois')
-            if count > 0:
-                print(f"POIs already loaded ({count} entries), skipping...")
-                return
-
-            print("Loading POI data...")
-
-            sample_pois = [
-                {
-                    "name": "Кремль Нижнего Новгорода",
-                    "lat": 56.328124,
-                    "lon": 44.002028,
-                    "category": "музей",
-                    "tags": ["история", "архитектура", "крепость"],
-                    "description": "Каменный кремль XVI века, исторический центр города",
-                    "avg_visit_minutes": 90,
-                    "rating": 4.8
-                },
-                {
-                    "name": "Чкаловская лестница",
-                    "lat": 56.331234,
-                    "lon": 43.998567,
-                    "category": "смотровая",
-                    "tags": ["архитектура", "панорама", "фото"],
-                    "description": "Монументальная лестница с 560 ступенями",
-                    "avg_visit_minutes": 30,
-                    "rating": 4.7
-                }
-            ]
-
-            print(f"Inserting {len(sample_pois)} sample POIs...")
-
-            for poi in sample_pois:
-                await conn.execute(
-                    '''
-                    INSERT INTO pois (name, lat, lon, category, tags, description, avg_visit_minutes, rating)
-                    VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
-                    ''',
-                    poi['name'],
-                    poi['lat'],
-                    poi['lon'],
-                    poi['category'],
-                    json.dumps(poi['tags']),
-                    poi['description'],
-                    poi['avg_visit_minutes'],
-                    poi['rating']
-                )
-
-            count = await conn.fetchval('SELECT COUNT(*) FROM pois')
-            print(f"Successfully loaded {count} POIs!")
-
-        finally:
-            await conn.close()
-
-    if __name__ == '__main__':
-        asyncio.run(load_pois())
+  load_pois.py: |-
+{{ .Files.Get "scripts/load_pois.py" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-tourist.fullname" . }}-poi-data
+  labels:
+    {{- include "ai-tourist.labels" . | nindent 4 }}
+data:
+  poi.json: |-
+{{ .Files.Get "data/poi.json" | indent 4 }}
 ---
 apiVersion: batch/v1
 kind: Job
@@ -111,13 +52,13 @@ spec:
           echo "Migration complete!";
         env:
         - name: DB_USER
-          value: "{{ .Values.postgresql.username }}"
+          value: "{{ .Values.postgresql.auth.username }}"
         - name: DB_HOST
-          value: {{ .Values.postgresql.name | default "ai-tourist-postgresql" | quote }}
+          value: {{ include "ai-tourist.fullname" . | printf "%s-postgresql" | quote }}
         - name: DB_PORT
           value: {{ .Values.postgresql.port | quote }}
         - name: DB_NAME
-          value: "{{ .Values.postgresql.database }}"
+          value: "{{ .Values.postgresql.auth.database }}"
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -135,13 +76,13 @@ spec:
           python /scripts/load_pois.py
         env:
         - name: DB_USER
-          value: "{{ .Values.postgresql.username }}"
+          value: "{{ .Values.postgresql.auth.username }}"
         - name: DB_HOST
-          value: {{ .Values.postgresql.name | default "ai-tourist-postgresql" | quote }}
+          value: {{ include "ai-tourist.fullname" . | printf "%s-postgresql" | quote }}
         - name: DB_PORT
           value: {{ .Values.postgresql.port | quote }}
         - name: DB_NAME
-          value: "{{ .Values.postgresql.database }}"
+          value: "{{ .Values.postgresql.auth.database }}"
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -150,8 +91,13 @@ spec:
         volumeMounts:
         - name: loader-script
           mountPath: /scripts
+        - name: poi-data
+          mountPath: /data
       volumes:
       - name: loader-script
         configMap:
           name: {{ include "ai-tourist.fullname" . }}-poi-loader-script
+      - name: poi-data
+        configMap:
+          name: {{ include "ai-tourist.fullname" . }}-poi-data
 {{- end }}

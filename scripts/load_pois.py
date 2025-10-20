@@ -9,7 +9,6 @@ import asyncpg
 import os
 import sys
 
-
 async def load_pois():
     """Load POI data from JSON file into database"""
     
@@ -27,16 +26,16 @@ async def load_pois():
     
     print(f"Found {len(pois)} POIs")
     
-    # Get database connection string
+    # Get database connection string (prefer env for K8s)
     database_url = os.environ.get(
         'DATABASE_URL',
-        'postgresql://aitourist:secure_password_change_in_prod@localhost:5432/aitourist_db'
+        'postgresql://aitourist:dev_password@ai-tourist-postgresql:5432/aitourist_db'  # K8s-friendly fallback
     )
     
     # Connect to database
     print("Connecting to database...")
     try:
-        conn = await asyncpg.connect(database_url)
+        conn = await asyncpg.connect(database_url, record_class=None)  # Faster, no Record objects
     except Exception as e:
         print(f"❌ Database connection failed: {e}")
         sys.exit(1)
@@ -69,14 +68,14 @@ async def load_pois():
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 ''',
                     poi.get('name', 'Unknown'),
-                    poi.get('lat', 0.0),
-                    poi.get('lon', 0.0),
+                    float(poi.get('lat', 0.0)),  # Ensure float
+                    float(poi.get('lon', 0.0)),  # Ensure float
                     poi.get('category', 'other'),
                     poi.get('description', ''),
-                    poi.get('rating', 0.0),
-                    poi.get('avg_visit_minutes', 30),
+                    float(poi.get('rating', 0.0)),  # Ensure float
+                    int(poi.get('avg_visit_minutes', 30)),  # Ensure int
                     poi.get('address', ''),
-                    poi.get('tags', []),
+                    poi.get('tags', []),  # List → text[]
                     poi.get('social_mode', 'any'),
                     poi.get('intensity_level', 'medium'),
                     poi.get('photo_tip', ''),
@@ -96,7 +95,6 @@ async def load_pois():
         sys.exit(1)
     finally:
         await conn.close()
-
 
 if __name__ == '__main__':
     asyncio.run(load_pois())
