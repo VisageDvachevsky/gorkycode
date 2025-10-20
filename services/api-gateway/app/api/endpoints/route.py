@@ -10,9 +10,14 @@ from fastapi import APIRouter, HTTPException
 from app.grpc.clients import grpc_clients
 from app.models.schemas import (
     CoffeePreferences,
+    CoordinatePoint,
+    ManeuverInstruction,
     POIInRoute,
+    RouteLegInstruction,
     RouteRequest,
     RouteResponse,
+    TransitGuidance,
+    TransitStopInfo,
 )
 from app.proto import llm_pb2, route_pb2
 
@@ -44,6 +49,72 @@ def _minutes_from_distance(distance_km: float) -> float:
     if distance_km <= 0:
         return 0.0
     return (distance_km / WALK_SPEED_KMH) * 60.0
+
+
+def _convert_transit_stop(stop_msg: route_pb2.TransitStop) -> Optional[TransitStopInfo]:
+    has_position = stop_msg.HasField("position")
+    if not stop_msg.name and not stop_msg.side and not has_position:
+        return None
+
+    position = (
+        CoordinatePoint(lat=stop_msg.position.lat, lon=stop_msg.position.lon)
+        if has_position
+        else None
+    )
+
+    return TransitStopInfo(
+        name=stop_msg.name or "",
+        side=stop_msg.side or None,
+        position=position,
+    )
+
+
+def _convert_leg_proto(leg: route_pb2.RouteLeg) -> RouteLegInstruction:
+    maneuvers: List[ManeuverInstruction] = []
+    for step in leg.maneuvers:
+        distance = step.distance_m if step.distance_m else None
+        duration = step.duration_sec if step.duration_sec else None
+        maneuvers.append(
+            ManeuverInstruction(
+                text=step.instruction or "",
+                street_name=step.street_name or None,
+                distance_m=distance,
+                duration_sec=duration,
+            )
+        )
+
+    transit: Optional[TransitGuidance] = None
+    if leg.HasField("transit"):
+        transit_msg = leg.transit
+        transit = TransitGuidance(
+            provider=transit_msg.provider or None,
+            line_name=transit_msg.line_name or None,
+            vehicle_type=transit_msg.vehicle_type or None,
+            direction=transit_msg.direction or None,
+            vehicle_number=transit_msg.vehicle_number or None,
+            summary=transit_msg.summary or None,
+            boarding=_convert_transit_stop(transit_msg.boarding),
+            alighting=_convert_transit_stop(transit_msg.alighting),
+            departure_time=transit_msg.departure_time or None,
+            arrival_time=transit_msg.arrival_time or None,
+            notes=transit_msg.notes or None,
+            walk_to_board_meters=
+                transit_msg.walk_to_board_meters if transit_msg.walk_to_board_meters else None,
+            walk_from_alight_meters=
+                transit_msg.walk_from_alight_meters if transit_msg.walk_from_alight_meters else None,
+        )
+
+    mode = leg.mode or ("transit" if transit else "walking")
+
+    return RouteLegInstruction(
+        mode=mode,
+        start=CoordinatePoint(lat=leg.start.lat, lon=leg.start.lon),
+        end=CoordinatePoint(lat=leg.end.lat, lon=leg.end.lon),
+        distance_km=leg.distance_km,
+        duration_minutes=leg.duration_minutes,
+        maneuvers=maneuvers,
+        transit=transit,
+    )
 
 
 def _map_intensity_for_ranking(intensity: str) -> str:
@@ -310,6 +381,29 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     if not ordered:
         raise HTTPException(404, "Не удалось собрать информацию по точкам маршрута")
 
+    movement_leg_msgs = list(route_plan.legs)
+    movement_legs: List[RouteLegInstruction] = [
+        _convert_leg_proto(leg_msg) for leg_msg in movement_leg_msgs
+    ]
+
+    planned_distance_km = route_plan.total_distance_km or sum(
+        leg.distance_km for leg in movement_legs
+    )
+    walking_distance_km = route_plan.total_walking_distance_km or sum(
+        leg.distance_km for leg in movement_legs if leg.mode == "walking"
+    )
+    transit_distance_km = route_plan.total_transit_distance_km or sum(
+        leg.distance_km for leg in movement_legs if leg.mode == "transit"
+    )
+    transit_distance_km = transit_distance_km or 0.0
+
+    if movement_legs and len(movement_legs) != len(ordered):
+        logger.warning(
+            "Mismatch between movement legs (%s) and POIs (%s)",
+            len(movement_legs),
+            len(ordered),
+        )
+
     llm_request = llm_pb2.RouteExplanationRequest(
         route=[
             llm_pb2.POIContext(
@@ -346,18 +440,32 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
 
     cursor_time = start_time
     total_distance_km = 0.0
+    extra_walking_km = 0.0
     route_items: List[POIInRoute] = []
     initial_time = start_time
     current_lat, current_lon = start_lat, start_lon
     order_counter = 1
     coffee_added = False
 
-    for item in ordered:
-        walk_km = _haversine_km(current_lat, current_lon, item["lat"], item["lon"])
-        walk_minutes = _minutes_from_distance(walk_km)
-        if walk_minutes:
-            cursor_time += timedelta(minutes=walk_minutes)
-            total_distance_km += walk_km
+    for idx, item in enumerate(ordered):
+        leg_distance = None
+        leg_duration = None
+
+        if idx < len(movement_legs):
+            leg_info = movement_legs[idx]
+            leg_distance = leg_info.distance_km
+            leg_duration = leg_info.duration_minutes
+        else:
+            logger.debug("No precomputed leg for segment %s, using haversine", idx)
+
+        if leg_distance is None:
+            leg_distance = _haversine_km(current_lat, current_lon, item["lat"], item["lon"])
+        if leg_duration is None:
+            leg_duration = _minutes_from_distance(leg_distance)
+
+        if leg_duration:
+            cursor_time += timedelta(minutes=leg_duration)
+        total_distance_km += leg_distance
 
         explanation = explanation_map.get(item["id"])
         visit_minutes = item["avg_visit_minutes"] or DEFAULT_VISIT_MINUTES
@@ -370,8 +478,16 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
                 name=item["name"],
                 lat=item["lat"],
                 lon=item["lon"],
-                why=(explanation.why if explanation and explanation.why else _fallback_why(item["name"], item["description"])),
-                tip=(explanation.tip if explanation and explanation.tip else (item.get("local_tip") or "")),
+                why=(
+                    explanation.why
+                    if explanation and explanation.why
+                    else _fallback_why(item["name"], item["description"])
+                ),
+                tip=(
+                    explanation.tip
+                    if explanation and explanation.tip
+                    else (item.get("local_tip") or "")
+                ),
                 est_visit_minutes=int(visit_minutes),
                 arrival_time=cursor_time,
                 leave_time=leave_time,
@@ -387,7 +503,8 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             request.coffee_preferences
             and request.coffee_preferences.enabled
             and not coffee_added
-            and (cursor_time - initial_time).total_seconds() / 60.0 >= request.coffee_preferences.interval_minutes
+            and (cursor_time - initial_time).total_seconds() / 60.0
+            >= request.coffee_preferences.interval_minutes
         ):
             coffee_data = await _maybe_add_coffee_break(
                 preferences=request.coffee_preferences,
@@ -399,14 +516,47 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             if coffee_data:
                 coffee_item, new_cursor_time, coffee_lat, coffee_lon, walk_km_to_cafe = coffee_data
                 total_distance_km += walk_km_to_cafe
+                walking_distance_km += walk_km_to_cafe
+                extra_walking_km += walk_km_to_cafe
                 route_items.append(coffee_item)
                 cursor_time = new_cursor_time
                 current_lat, current_lon = coffee_lat, coffee_lon
                 order_counter += 1
                 coffee_added = True
 
+    if planned_distance_km and total_distance_km < planned_distance_km:
+        total_distance_km = planned_distance_km
+
+    if walking_distance_km:
+        walking_distance_km += extra_walking_km
+    else:
+        walking_distance_km = extra_walking_km
+
     total_est_minutes = int(round((cursor_time - initial_time).total_seconds() / 60.0))
-    route_geometry = [[start_lat, start_lon]] + [[item.lat, item.lon] for item in route_items]
+
+    geometry_points = [(item.lat, item.lon) for item in route_items]
+    if geometry_points:
+        try:
+            geometry_response = await grpc_clients.route_planner_client.calculate_route_geometry(
+                start_lat=start_lat,
+                start_lon=start_lon,
+                waypoints=geometry_points,
+            )
+            if geometry_response.geometry:
+                route_geometry = [
+                    [coord.lat, coord.lon] for coord in geometry_response.geometry
+                ]
+            else:
+                route_geometry = [[start_lat, start_lon]] + [
+                    [lat, lon] for lat, lon in geometry_points
+                ]
+        except Exception as exc:
+            logger.warning("Failed to fetch detailed geometry: %s", exc)
+            route_geometry = [[start_lat, start_lon]] + [
+                [lat, lon] for lat, lon in geometry_points
+            ]
+    else:
+        route_geometry = [[start_lat, start_lon]]
 
     notes: List[str] = [f"Старт: {start_label}"]
     if coffee_added:
@@ -430,6 +580,9 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         route_geometry=route_geometry,
         start_time_used=initial_time,
         time_warnings=warnings,
+        movement_legs=movement_legs,
+        walking_distance_km=round(walking_distance_km, 2),
+        transit_distance_km=round(transit_distance_km, 2),
     )
 
     return response
