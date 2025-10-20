@@ -8,14 +8,29 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS_DIR = REPO_ROOT / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
 
-APP_PROTO_DIR = REPO_ROOT / "services" / "poi-service" / "app" / "proto"
-if str(APP_PROTO_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_PROTO_DIR))
+def _add_sys_path(path: Path) -> None:
+    """Prepend *path* to ``sys.path`` if it exists and is not already present."""
+
+    if path.is_dir():
+        resolved = str(path)
+        if resolved not in sys.path:
+            sys.path.insert(0, resolved)
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+# Ensure both the local service scripts directory and the repository-level
+# ``scripts`` directory are importable regardless of build context.
+_add_sys_path(SCRIPT_DIR)
+for ancestor in SCRIPT_PATH.parents:
+    _add_sys_path(ancestor / "scripts")
+
+# gRPC stubs are generated into ``app/proto`` inside the service image; during
+# local execution the same directory exists under the repository service root.
+for ancestor in SCRIPT_PATH.parents:
+    _add_sys_path(ancestor / "app" / "proto")
 
 from poi_loader_utils import PoiDataError, load_poi_data, resolve_poi_json_path
 

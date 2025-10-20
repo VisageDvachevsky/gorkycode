@@ -26,6 +26,8 @@ COPY services/poi-service/app ./app
 
 # КРИТИЧНО: Копируем scripts с load_pois.py
 COPY services/poi-service/scripts/ ./scripts/
+# Shared loader utilities
+COPY scripts/poi_loader_utils.py ./scripts/
 
 # Create proto output directory
 RUN mkdir -p ./app/proto
