@@ -116,6 +116,7 @@ async def plan_route(
         start_lon=start_lon,
         pois=candidate_pois,
         available_hours=request.hours,
+        intensity=request.intensity,
     )
     
     if not optimized_route:
@@ -137,7 +138,8 @@ async def plan_route(
             preferences=request.coffee_preferences.dict(),
             coffee_service=coffee_service,
             session=session,
-            start_time=route_start_time  # Pass start time for availability check
+            start_time=route_start_time,  # Pass start time for availability check
+            intensity=request.intensity,
         )
         
         logger.info(f"Coffee breaks added, total POIs: {len(optimized_route)}")
@@ -181,9 +183,12 @@ async def plan_route(
     
     for order, poi in enumerate(optimized_route, 1):
         walk_time = route_planner.calculate_walk_time_minutes(
-            routing_service.calculate_distance_km(prev_lat, prev_lon, poi.lat, poi.lon)
+            routing_service.calculate_distance_km(prev_lat, prev_lon, poi.lat, poi.lon),
+            request.intensity,
         )
-        
+
+        visit_minutes = route_planner.get_effective_visit_minutes(poi, request.intensity)
+
         if request.allow_transit:
             transit = await routing_service.get_transit_suggestion(
                 (prev_lat, prev_lon),
@@ -200,7 +205,7 @@ async def plan_route(
         
         current_time += timedelta(minutes=walk_time)
         arrival_time = current_time
-        leave_time = current_time + timedelta(minutes=poi.avg_visit_minutes)
+        leave_time = current_time + timedelta(minutes=visit_minutes)
         
         # Check POI availability
         is_open, opening_hours = time_scheduler.check_poi_availability(poi, arrival_time)
@@ -224,7 +229,7 @@ async def plan_route(
                 lon=poi.lon,
                 why=explanation.get("why", f"{poi.name} — {poi.description[:200]}"),
                 tip=explanation.get("tip", poi.local_tip),
-                est_visit_minutes=poi.avg_visit_minutes,
+                est_visit_minutes=visit_minutes,
                 arrival_time=arrival_time,
                 leave_time=leave_time,
                 is_coffee_break=is_coffee_break,

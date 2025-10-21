@@ -7,16 +7,18 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class RouteOptimizationRequest(_message.Message):
-    __slots__ = ("start_lat", "start_lon", "pois", "available_hours")
+    __slots__ = ("start_lat", "start_lon", "pois", "available_hours", "intensity")
     START_LAT_FIELD_NUMBER: _ClassVar[int]
     START_LON_FIELD_NUMBER: _ClassVar[int]
     POIS_FIELD_NUMBER: _ClassVar[int]
     AVAILABLE_HOURS_FIELD_NUMBER: _ClassVar[int]
+    INTENSITY_FIELD_NUMBER: _ClassVar[int]
     start_lat: float
     start_lon: float
     pois: _containers.RepeatedCompositeFieldContainer[POIInfo]
     available_hours: float
-    def __init__(self, start_lat: _Optional[float] = ..., start_lon: _Optional[float] = ..., pois: _Optional[_Iterable[_Union[POIInfo, _Mapping]]] = ..., available_hours: _Optional[float] = ...) -> None: ...
+    intensity: str
+    def __init__(self, start_lat: _Optional[float] = ..., start_lon: _Optional[float] = ..., pois: _Optional[_Iterable[_Union[POIInfo, _Mapping]]] = ..., available_hours: _Optional[float] = ..., intensity: _Optional[str] = ...) -> None: ...
 
 class POIInfo(_message.Message):
     __slots__ = ("id", "name", "lat", "lon", "avg_visit_minutes", "rating")

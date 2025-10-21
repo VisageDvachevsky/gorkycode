@@ -12,6 +12,7 @@ message RouteOptimizationRequest {
   double start_lon = 2;
   repeated POIInfo pois = 3;
   double available_hours = 4;
+  string intensity = 5;
 }
 
 message POIInfo {

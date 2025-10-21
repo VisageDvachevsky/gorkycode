@@ -51,6 +51,7 @@ async def generate_sample():
             start_lon=start_lon,
             pois=candidate_pois,
             available_hours=hours,
+            intensity=intensity,
         )
         print(f"\n✅ Optimized route: {len(optimized_route)} POIs, {total_distance:.2f}km")
         

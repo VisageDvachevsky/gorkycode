@@ -21,6 +21,27 @@ CoordinateTuple = Tuple[float, float]
 
 
 class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
+    INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
+        "relaxed": {
+            "walk_speed_multiplier": 0.85,
+            "visit_duration_multiplier": 1.3,
+            "min_visit_minutes": 25,
+            "max_visit_minutes": 75,
+        },
+        "medium": {
+            "walk_speed_multiplier": 1.0,
+            "visit_duration_multiplier": 1.0,
+            "min_visit_minutes": 20,
+            "max_visit_minutes": 60,
+        },
+        "intense": {
+            "walk_speed_multiplier": 1.15,
+            "visit_duration_multiplier": 0.75,
+            "min_visit_minutes": 15,
+            "max_visit_minutes": 45,
+        },
+    }
+
     def __init__(self) -> None:
         self.walk_speed_kmh = settings.WALK_SPEED_KMH
 
@@ -30,6 +51,19 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         await twogis_client.connect_redis()
         await transit_advisor.connect_redis()
         logger.info("✓ Route Planner Service initialised (Redis connected)")
+
+    def _get_intensity_profile(self, intensity: str) -> Dict[str, float]:
+        return self.INTENSITY_PROFILES.get(intensity, self.INTENSITY_PROFILES["medium"])
+
+    def _effective_visit_minutes(self, base_minutes: float, intensity: str) -> float:
+        minutes = base_minutes or 0.0
+        if minutes <= 0:
+            minutes = 30.0
+        profile = self._get_intensity_profile(intensity)
+        adjusted = minutes * profile["visit_duration_multiplier"]
+        min_minutes = profile["min_visit_minutes"]
+        max_minutes = profile["max_visit_minutes"]
+        return float(max(min_minutes, min(max_minutes, max(5.0, adjusted))))
 
     async def OptimizeRoute(
         self,
@@ -43,23 +77,30 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
             start_point: CoordinateTuple = (request.start_lat, request.start_lon)
             available_minutes = request.available_hours * 60
+            intensity = (request.intensity or "medium").lower()
 
             matrix = await self._build_distance_matrix(start_point, pois)
             if matrix is None:
                 matrix = self._fallback_distance_matrix(start_point, pois)
 
             route_indices, _, _ = self._nearest_neighbor_route(
-                matrix=matrix, pois=pois, available_minutes=available_minutes
+                matrix=matrix,
+                pois=pois,
+                available_minutes=available_minutes,
+                intensity=intensity,
             )
 
             if not route_indices:
                 return route_pb2.RouteOptimizationResponse()
 
             ordered_route = [pois[idx] for idx in route_indices]
-            legs, totals = await self._build_route_legs(start_point, ordered_route)
+            legs, totals = await self._build_route_legs(
+                start_point, ordered_route, intensity
+            )
 
             logger.info(
-                "✓ Optimised route: %s POIs, %.2f km, %.0f min",
+                "✓ Optimised route (%s): %s POIs, %.2f km, %.0f min",
+                intensity,
                 len(ordered_route),
                 totals["total_distance"],
                 totals["total_duration"],
@@ -240,6 +281,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         matrix: np.ndarray,
         pois: Sequence[route_pb2.POIInfo],
         available_minutes: float,
+        intensity: str,
     ) -> Tuple[List[int], float, float]:
         route: List[int] = []
         remaining = set(range(len(pois)))
@@ -253,8 +295,10 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
             for poi_idx in remaining:
                 dist = matrix[current_idx + 1][poi_idx + 1]
-                walk_time = self._calculate_walk_time_minutes(dist)
-                poi_time = pois[poi_idx].avg_visit_minutes
+                walk_time = self._calculate_walk_time_minutes(dist, intensity)
+                poi_time = self._effective_visit_minutes(
+                    pois[poi_idx].avg_visit_minutes, intensity
+                )
 
                 candidate_time = total_time + walk_time + poi_time
                 if candidate_time > available_minutes:
@@ -269,20 +313,28 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
             distance = matrix[current_idx + 1][best_idx + 1]
             total_distance += distance
-            total_time += self._calculate_walk_time_minutes(distance) + pois[best_idx].avg_visit_minutes
+            total_time += self._calculate_walk_time_minutes(distance, intensity)
+            total_time += self._effective_visit_minutes(
+                pois[best_idx].avg_visit_minutes, intensity
+            )
             route.append(best_idx)
             remaining.remove(best_idx)
             current_idx = best_idx
 
         return route, total_time, total_distance
 
-    def _calculate_walk_time_minutes(self, distance_km: float) -> float:
+    def _calculate_walk_time_minutes(self, distance_km: float, intensity: str) -> float:
         if distance_km <= 0:
             return 0.0
-        return (distance_km / self.walk_speed_kmh) * 60.0
+        profile = self._get_intensity_profile(intensity)
+        walk_speed = max(0.5, self.walk_speed_kmh * profile["walk_speed_multiplier"])
+        return (distance_km / walk_speed) * 60.0
 
     async def _build_route_legs(
-        self, start_point: CoordinateTuple, ordered_route: Sequence[route_pb2.POIInfo]
+        self,
+        start_point: CoordinateTuple,
+        ordered_route: Sequence[route_pb2.POIInfo],
+        intensity: str,
     ) -> Tuple[List[route_pb2.RouteLeg], Dict[str, float]]:
         legs: List[route_pb2.RouteLeg] = []
         totals = {
@@ -295,7 +347,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         current = start_point
         for poi in ordered_route:
             target = (poi.lat, poi.lon)
-            leg, stats = await self._plan_leg(current, target)
+            leg, stats = await self._plan_leg(current, target, intensity)
             legs.append(leg)
 
             totals["total_distance"] += stats["distance"]
@@ -308,12 +360,15 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         return legs, totals
 
     async def _plan_leg(
-        self, start: CoordinateTuple, end: CoordinateTuple
+        self,
+        start: CoordinateTuple,
+        end: CoordinateTuple,
+        intensity: str,
     ) -> Tuple[route_pb2.RouteLeg, Dict[str, float]]:
         walk_route = await twogis_client.get_walking_route([start, end])
 
         walk_distance = geodesic(start, end).km
-        walk_duration = self._calculate_walk_time_minutes(walk_distance)
+        walk_duration = self._calculate_walk_time_minutes(walk_distance, intensity)
         walk_maneuvers: List[Dict[str, float | str]] = []
 
         if walk_route:
@@ -327,12 +382,13 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             walk_to_board = float(transit_option.get("walk_to_board_m") or 0.0)
             walk_from_alight = float(transit_option.get("walk_from_alight_m") or 0.0)
             access_minutes = self._calculate_walk_time_minutes(
-                (walk_to_board + walk_from_alight) / 1000.0
+                (walk_to_board + walk_from_alight) / 1000.0,
+                intensity,
             )
 
             effective_transit_duration = transit_duration + access_minutes
             if effective_transit_duration and effective_transit_duration < walk_duration * 0.9:
-                leg = self._build_transit_leg(start, end, transit_option)
+                leg = self._build_transit_leg(start, end, transit_option, intensity)
                 return leg, {
                     "distance": float(
                         transit_option.get("distance_km") or walk_distance
@@ -383,6 +439,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         start: CoordinateTuple,
         end: CoordinateTuple,
         transit: Dict[str, Any],
+        intensity: str,
     ) -> route_pb2.RouteLeg:
         distance_km = float(transit.get("distance_km") or 0.0)
         if distance_km <= 0:
@@ -390,7 +447,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
         duration_min = float(transit.get("duration_min") or 0.0)
         if duration_min <= 0:
-            duration_min = self._calculate_walk_time_minutes(distance_km)
+            duration_min = self._calculate_walk_time_minutes(distance_km, intensity)
 
         leg = route_pb2.RouteLeg(
             start=route_pb2.Coordinate(lat=start[0], lon=start[1]),
