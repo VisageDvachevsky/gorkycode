@@ -7,8 +7,6 @@ from typing import List
 import grpc
 import redis.asyncio as aioredis
 
-# See services/poi-service/scripts/load_pois.py for context on disabling the
-# accelerated HF transfer backend by default.
 os.environ.setdefault("HF_HUB_DISABLE_HF_TRANSFER", "1")
 
 from sentence_transformers import SentenceTransformer
@@ -25,11 +23,10 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
         self.redis_client = None
     
     async def initialize(self):
-        """Initialize model and Redis"""
-        logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
+        logger.info("Loading embedding model: %s", settings.EMBEDDING_MODEL)
         try:
             self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
-        except Exception as exc:  # pragma: no cover - operational safeguard
+        except Exception as exc:
             cache_dir = os.getenv("SENTENCE_TRANSFORMERS_HOME") or "~/.cache/sentence-transformers"
             logger.error(
                 "Failed to load embedding model '%s': %s", settings.EMBEDDING_MODEL, exc
@@ -39,9 +36,12 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
                 cache_dir,
             )
             raise
-        logger.info(f"✓ Model loaded (dim={self.model.get_sentence_embedding_dimension()})")
-        
-        logger.info(f"Connecting to Redis at {settings.REDIS_URL}")
+        logger.info(
+            "✓ Model loaded (dim=%s)",
+            self.model.get_sentence_embedding_dimension(),
+        )
+
+        logger.info("Connecting to Redis at %s", settings.REDIS_URL)
         self.redis_client = await aioredis.from_url(
             settings.REDIS_URL,
             encoding="utf-8",
@@ -54,7 +54,6 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
         request: embedding_pb2.EmbeddingRequest,
         context
     ) -> embedding_pb2.EmbeddingResponse:
-        """Generate embedding for text"""
         try:
             if request.use_cache:
                 cached = await self._get_cached_embedding(request.text)
@@ -80,21 +79,20 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
                 dimension=len(embedding)
             )
             
-        except Exception as e:
-            logger.error(f"Embedding generation failed: {e}")
+        except Exception as exc:
+            logger.error("Embedding generation failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Embedding generation failed: {str(e)}")
+            context.set_details(f"Embedding generation failed: {exc}")
             return embedding_pb2.EmbeddingResponse()
-    
+
     async def BatchEmbedding(
         self,
         request: embedding_pb2.BatchEmbeddingRequest,
         context
     ) -> embedding_pb2.BatchEmbeddingResponse:
-        """Generate embeddings for multiple texts"""
         try:
             results = []
-            
+
             for text in request.texts:
                 if request.use_cache:
                     cached = await self._get_cached_embedding(text)
@@ -125,29 +123,27 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
             
             return embedding_pb2.BatchEmbeddingResponse(vectors=results)
             
-        except Exception as e:
-            logger.error(f"Batch embedding failed: {e}")
+        except Exception as exc:
+            logger.error("Batch embedding failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Batch embedding failed: {str(e)}")
+            context.set_details(f"Batch embedding failed: {exc}")
             return embedding_pb2.BatchEmbeddingResponse()
-    
+
     async def _get_cached_embedding(self, text: str) -> List[float] | None:
-        """Get embedding from cache"""
         try:
             cache_key = self._generate_cache_key(text)
             cached = await self.redis_client.get(cache_key)
-            
+
             if cached:
                 return pickle.loads(cached)
             
             return None
             
-        except Exception as e:
-            logger.warning(f"Cache retrieval failed: {e}")
+        except Exception as exc:
+            logger.warning("Cache retrieval failed: %s", exc)
             return None
-    
+
     async def _cache_embedding(self, text: str, embedding: List[float]):
-        """Cache embedding"""
         try:
             cache_key = self._generate_cache_key(text)
             await self.redis_client.setex(
@@ -155,10 +151,9 @@ class EmbeddingServicer(embedding_pb2_grpc.EmbeddingServiceServicer):
                 settings.CACHE_TTL_SECONDS,
                 pickle.dumps(embedding)
             )
-        except Exception as e:
-            logger.warning(f"Cache write failed: {e}")
-    
+        except Exception as exc:
+            logger.warning("Cache write failed: %s", exc)
+
     def _generate_cache_key(self, text: str) -> str:
-        """Generate cache key from text"""
         text_hash = hashlib.sha256(text.encode()).hexdigest()
         return f"embedding:{settings.EMBEDDING_MODEL}:{text_hash}"

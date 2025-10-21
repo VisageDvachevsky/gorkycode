@@ -1,14 +1,15 @@
 import logging
-from typing import List, Dict
+import logging
+from typing import Dict, List
 
 import grpc
 import numpy as np
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.proto import ranking_pb2, ranking_pb2_grpc
 from app.core.config import settings
 from app.models.poi import POI
+from app.proto import ranking_pb2, ranking_pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,7 @@ class RankingServicer(ranking_pb2_grpc.RankingServiceServicer):
         self.session_maker = None
     
     async def initialize(self):
-        """Initialize database connection"""
-        logger.info(f"Connecting to database: {settings.DATABASE_URL}")
+        logger.info("Connecting to database: %s", settings.DATABASE_URL)
         
         self.engine = create_async_engine(
             settings.DATABASE_URL,
@@ -54,7 +54,6 @@ class RankingServicer(ranking_pb2_grpc.RankingServiceServicer):
         request: ranking_pb2.RankingRequest,
         context
     ) -> ranking_pb2.RankingResponse:
-        """Rank POIs based on user preferences"""
         try:
             async with self.session_maker() as session:
                 stmt = select(POI)
@@ -112,28 +111,26 @@ class RankingServicer(ranking_pb2_grpc.RankingServiceServicer):
                     for poi, score in scored_pois
                 ]
                 
-                logger.info(f"Ranked {len(response_pois)} POIs")
+                logger.info("Ranked %s POIs", len(response_pois))
                 
                 return ranking_pb2.RankingResponse(scored_pois=response_pois)
                 
-        except Exception as e:
-            logger.error(f"Ranking failed: {e}")
+        except Exception as exc:
+            logger.error("Ranking failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Ranking failed: {str(e)}")
+            context.set_details(f"Ranking failed: {exc}")
             return ranking_pb2.RankingResponse()
-    
+
     def _cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
-        """Calculate cosine similarity between two vectors"""
         norm1 = np.linalg.norm(vec1)
         norm2 = np.linalg.norm(vec2)
-        
+
         if norm1 == 0 or norm2 == 0:
             return 0.0
-        
+
         return float(np.dot(vec1, vec2) / (norm1 * norm2))
-    
+
     def _get_category_boost(self, category: str, social_mode: str, intensity: str) -> float:
-        """Get boost multiplier based on category and preferences"""
         boost = 1.0
         
         if social_mode in self.SOCIAL_MODE_WEIGHTS:

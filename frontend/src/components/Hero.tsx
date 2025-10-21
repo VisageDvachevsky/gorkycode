@@ -9,7 +9,6 @@ export default function Hero({ onStartJourney }: HeroProps) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950">
       <div className="max-w-6xl mx-auto text-center py-12">
-        {/* Main Icon */}
         <motion.div
           initial={{ scale: 0, rotate: -180 }}
           animate={{ scale: 1, rotate: 0 }}
@@ -29,7 +28,6 @@ export default function Hero({ onStartJourney }: HeroProps) {
           </div>
         </motion.div>
 
-        {/* Heading */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -51,7 +49,6 @@ export default function Hero({ onStartJourney }: HeroProps) {
           </p>
         </motion.div>
 
-        {/* Features Grid */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -86,7 +83,6 @@ export default function Hero({ onStartJourney }: HeroProps) {
           })}
         </motion.div>
 
-        {/* CTA Button */}
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -119,7 +115,6 @@ export default function Hero({ onStartJourney }: HeroProps) {
           </p>
         </motion.div>
 
-        {/* Social Proof / Stats */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

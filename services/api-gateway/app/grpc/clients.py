@@ -1,134 +1,113 @@
-import grpc
-import logging
-from typing import Optional, List, Dict
+from __future__ import annotations
 
+import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Generic, List, Optional, Sequence, Tuple, TypeVar
+
+import grpc
+
+from app.core.config import settings
 from app.proto import (
     embedding_pb2,
     embedding_pb2_grpc,
+    geocoding_pb2,
+    geocoding_pb2_grpc,
+    llm_pb2,
+    llm_pb2_grpc,
     poi_pb2,
     poi_pb2_grpc,
     ranking_pb2,
     ranking_pb2_grpc,
     route_pb2,
     route_pb2_grpc,
-    llm_pb2,
-    llm_pb2_grpc,
-    geocoding_pb2,
-    geocoding_pb2_grpc
 )
-from app.core.config import settings
-
 logger = logging.getLogger(__name__)
 
+TStub = TypeVar("TStub")
 
-class EmbeddingClient:
-    def __init__(self, url: str):
+
+class GrpcClient(Generic[TStub], ABC):
+    def __init__(self, name: str, url: str) -> None:
+        self.name = name
         self.url = url
         self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[embedding_pb2_grpc.EmbeddingServiceStub] = None
+        self._stub: Optional[TStub] = None
 
-    async def connect(self):
+    async def connect(self) -> None:
+        if self.channel:
+            return
         try:
             self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = embedding_pb2_grpc.EmbeddingServiceStub(self.channel)
-            logger.info(f"✓ Connected to Embedding Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Embedding service: {e}")
+            self._stub = self._create_stub(self.channel)
+            logger.info("Connected to %s at %s", self.name, self.url)
+        except Exception:
+            logger.exception("Failed to connect to %s at %s", self.name, self.url)
+            self.channel = None
+            self._stub = None
             raise
 
-    async def close(self):
+    async def close(self) -> None:
         if self.channel:
             await self.channel.close()
+        self.channel = None
+        self._stub = None
 
-    async def generate_embedding(
-        self,
-        text: str,
-        use_cache: bool = True,
-    ) -> embedding_pb2.EmbeddingResponse:
-        if not self.stub:
-            raise RuntimeError("Embedding gRPC stub is not initialised")
+    def stub(self) -> TStub:
+        if not self._stub:
+            raise RuntimeError(f"{self.name} gRPC stub is not initialised")
+        return self._stub
 
+    def is_ready(self) -> bool:
+        return self._stub is not None
+
+    @abstractmethod
+    def _create_stub(self, channel: grpc.aio.Channel) -> TStub:
+        raise NotImplementedError
+
+
+class EmbeddingClient(GrpcClient[embedding_pb2_grpc.EmbeddingServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("Embedding Service", settings.EMBEDDING_SERVICE_URL)
+
+    def _create_stub(self, channel: grpc.aio.Channel) -> embedding_pb2_grpc.EmbeddingServiceStub:
+        return embedding_pb2_grpc.EmbeddingServiceStub(channel)
+
+    async def generate_embedding(self, text: str, use_cache: bool = True) -> embedding_pb2.EmbeddingResponse:
         request = embedding_pb2.EmbeddingRequest(text=text, use_cache=use_cache)
-        return await self.stub.GenerateEmbedding(request)
+        return await self.stub().GenerateEmbedding(request)
 
 
-class POIClient:
-    def __init__(self, url: str):
-        self.url = url
-        self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[poi_pb2_grpc.POIServiceStub] = None
+class POIClient(GrpcClient[poi_pb2_grpc.POIServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("POI Service", settings.POI_SERVICE_URL)
 
-    async def connect(self):
-        try:
-            self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = poi_pb2_grpc.POIServiceStub(self.channel)
-            logger.info(f"✓ Connected to POI Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to POI service: {e}")
-            raise
+    def _create_stub(self, channel: grpc.aio.Channel) -> poi_pb2_grpc.POIServiceStub:
+        return poi_pb2_grpc.POIServiceStub(channel)
 
-    async def close(self):
-        if self.channel:
-            await self.channel.close()
-
-    async def get_all_pois(self, categories: List[str] = None, with_embeddings: bool = True):
-        if not self.stub:
-            raise RuntimeError("POI gRPC stub is not initialised")
-
-        request = poi_pb2.GetPOIsRequest(
-            categories=categories or [],
-            with_embeddings=with_embeddings
-        )
-        response = await self.stub.GetAllPOIs(request)
+    async def get_all_pois(self, categories: Optional[List[str]] = None, with_embeddings: bool = True):
+        request = poi_pb2.GetPOIsRequest(categories=categories or [], with_embeddings=with_embeddings)
+        response = await self.stub().GetAllPOIs(request)
         return response.pois
 
-    async def get_categories(self) -> List[Dict]:
-        if not self.stub:
-            raise RuntimeError("POI gRPC stub is not initialised")
-
-        request = poi_pb2.GetCategoriesRequest()
-        response = await self.stub.GetCategories(request)
-        
+    async def get_categories(self) -> List[Dict[str, int | str]]:
+        response = await self.stub().GetCategories(poi_pb2.GetCategoriesRequest())
         return [
-            {
-                "value": cat.value,
-                "label": cat.label,
-                "count": cat.count
-            }
-            for cat in response.categories
+            {"value": category.value, "label": category.label, "count": category.count}
+            for category in response.categories
         ]
 
     async def find_cafes_near_location(self, lat: float, lon: float, radius_km: float = 1.0):
-        if not self.stub:
-            raise RuntimeError("POI gRPC stub is not initialised")
-
-        request = poi_pb2.CafeSearchRequest(
-            lat=lat,
-            lon=lon,
-            radius_km=radius_km
-        )
-        response = await self.stub.FindCafesNearLocation(request)
+        request = poi_pb2.CafeSearchRequest(lat=lat, lon=lon, radius_km=radius_km)
+        response = await self.stub().FindCafesNearLocation(request)
         return response.cafes
 
 
-class RankingClient:
-    def __init__(self, url: str):
-        self.url = url
-        self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[ranking_pb2_grpc.RankingServiceStub] = None
+class RankingClient(GrpcClient[ranking_pb2_grpc.RankingServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("Ranking Service", settings.RANKING_SERVICE_URL)
 
-    async def connect(self):
-        try:
-            self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = ranking_pb2_grpc.RankingServiceStub(self.channel)
-            logger.info(f"✓ Connected to Ranking Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Ranking service: {e}")
-            raise
-
-    async def close(self):
-        if self.channel:
-            await self.channel.close()
+    def _create_stub(self, channel: grpc.aio.Channel) -> ranking_pb2_grpc.RankingServiceStub:
+        return ranking_pb2_grpc.RankingServiceStub(channel)
 
     async def rank_pois(
         self,
@@ -136,40 +115,25 @@ class RankingClient:
         social_mode: str,
         intensity: str,
         top_k: int = 20,
-        categories_filter: List[str] = None
+        categories_filter: Optional[List[str]] = None,
     ):
-        if not self.stub:
-            raise RuntimeError("Ranking gRPC stub is not initialised")
-
         request = ranking_pb2.RankingRequest(
             user_embedding=user_embedding,
             social_mode=social_mode,
             intensity=intensity,
             top_k=top_k,
-            categories_filter=categories_filter or []
+            categories_filter=categories_filter or [],
         )
-        response = await self.stub.RankPOIs(request)
+        response = await self.stub().RankPOIs(request)
         return response.scored_pois
 
 
-class RoutePlannerClient:
-    def __init__(self, url: str):
-        self.url = url
-        self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[route_pb2_grpc.RoutePlannerServiceStub] = None
+class RoutePlannerClient(GrpcClient[route_pb2_grpc.RoutePlannerServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("Route Planner Service", settings.ROUTE_SERVICE_URL)
 
-    async def connect(self):
-        try:
-            self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = route_pb2_grpc.RoutePlannerServiceStub(self.channel)
-            logger.info(f"✓ Connected to Route Planner Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Route Planner service: {e}")
-            raise
-
-    async def close(self):
-        if self.channel:
-            await self.channel.close()
+    def _create_stub(self, channel: grpc.aio.Channel) -> route_pb2_grpc.RoutePlannerServiceStub:
+        return route_pb2_grpc.RoutePlannerServiceStub(channel)
 
     async def optimize_route(
         self,
@@ -178,10 +142,7 @@ class RoutePlannerClient:
         pois: List[route_pb2.POIInfo],
         available_hours: float,
         intensity: str,
-    ):
-        if not self.stub:
-            raise RuntimeError("Route planner gRPC stub is not initialised")
-
+    ) -> route_pb2.RouteOptimizationResponse:
         request = route_pb2.RouteOptimizationRequest(
             start_lat=start_lat,
             start_lon=start_lon,
@@ -189,162 +150,73 @@ class RoutePlannerClient:
             available_hours=available_hours,
             intensity=intensity,
         )
-        response = await self.stub.OptimizeRoute(request)
-        return response
+        return await self.stub().OptimizeRoute(request)
 
     async def calculate_route_geometry(
         self,
         start_lat: float,
         start_lon: float,
-        waypoints: List[tuple]
-    ):
-        if not self.stub:
-            raise RuntimeError("Route planner gRPC stub is not initialised")
-
-        coords = [
-            route_pb2.Coordinate(lat=lat, lon=lon)
-            for lat, lon in waypoints
-        ]
-
-        request = route_pb2.RouteGeometryRequest(
-            start_lat=start_lat,
-            start_lon=start_lon,
-            waypoints=coords
-        )
-        response = await self.stub.CalculateRouteGeometry(request)
-        return response
+        waypoints: Sequence[Tuple[float, float]],
+    ) -> route_pb2.RouteGeometryResponse:
+        coords = [route_pb2.Coordinate(lat=lat, lon=lon) for lat, lon in waypoints]
+        request = route_pb2.RouteGeometryRequest(start_lat=start_lat, start_lon=start_lon, waypoints=coords)
+        return await self.stub().CalculateRouteGeometry(request)
 
 
-class LLMClient:
-    def __init__(self, url: str):
-        self.url = url
-        self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[llm_pb2_grpc.LLMServiceStub] = None
+class LLMClient(GrpcClient[llm_pb2_grpc.LLMServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("LLM Service", settings.LLM_SERVICE_URL)
 
-    async def connect(self):
-        try:
-            self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = llm_pb2_grpc.LLMServiceStub(self.channel)
-            logger.info(f"✓ Connected to LLM Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to LLM service: {e}")
-            raise
+    def _create_stub(self, channel: grpc.aio.Channel) -> llm_pb2_grpc.LLMServiceStub:
+        return llm_pb2_grpc.LLMServiceStub(channel)
 
-    async def close(self):
-        if self.channel:
-            await self.channel.close()
-
-    async def generate_route_explanation(
-        self,
-        route_pois,
-        user_interests: str,
-        social_mode: str,
-        intensity: str
-    ):
-        if not self.stub:
-            raise RuntimeError("LLM gRPC stub is not initialised")
-
-        poi_contexts = [
-            llm_pb2.POIContext(
-                id=poi.poi_id,
-                name=poi.name,
-                description=poi.description,
-                category=poi.category,
-                tags=list(poi.tags) if hasattr(poi, 'tags') else [],
-                local_tip=poi.local_tip if hasattr(poi, 'local_tip') else ""
-            )
-            for poi in route_pois
-        ]
-        
-        request = llm_pb2.RouteExplanationRequest(
-            route=poi_contexts,
-            user_interests=user_interests or "",
-            social_mode=social_mode,
-            intensity=intensity
-        )
-        response = await self.stub.GenerateRouteExplanation(request)
-        return response
+    async def generate_route_explanation(self, request: llm_pb2.RouteExplanationRequest) -> llm_pb2.RouteExplanationResponse:
+        return await self.stub().GenerateRouteExplanation(request)
 
 
-class GeocodingClient:
-    def __init__(self, url: str):
-        self.url = url
-        self.channel: Optional[grpc.aio.Channel] = None
-        self.stub: Optional[geocoding_pb2_grpc.GeocodingServiceStub] = None
+class GeocodingClient(GrpcClient[geocoding_pb2_grpc.GeocodingServiceStub]):
+    def __init__(self) -> None:
+        super().__init__("Geocoding Service", settings.GEOCODING_SERVICE_URL)
 
-    async def connect(self):
-        try:
-            self.channel = grpc.aio.insecure_channel(self.url)
-            self.stub = geocoding_pb2_grpc.GeocodingServiceStub(self.channel)
-            logger.info(f"✓ Connected to Geocoding Service: {self.url}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Geocoding service: {e}")
-            raise
-
-    async def close(self):
-        if self.channel:
-            await self.channel.close()
+    def _create_stub(self, channel: grpc.aio.Channel) -> geocoding_pb2_grpc.GeocodingServiceStub:
+        return geocoding_pb2_grpc.GeocodingServiceStub(channel)
 
     async def geocode_address(self, address: str, city: str = "Нижний Новгород"):
-        if not self.stub:
-            raise RuntimeError("Geocoding gRPC stub is not initialised")
-
-        request = geocoding_pb2.GeocodeRequest(
-            address=address,
-            city=city
-        )
-        response = await self.stub.GeocodeAddress(request)
-        return response
+        request = geocoding_pb2.GeocodeRequest(address=address, city=city)
+        return await self.stub().GeocodeAddress(request)
 
     async def validate_coordinates(self, lat: float, lon: float):
-        if not self.stub:
-            raise RuntimeError("Geocoding gRPC stub is not initialised")
-
-        request = geocoding_pb2.CoordinateValidationRequest(
-            lat=lat,
-            lon=lon
-        )
-        response = await self.stub.ValidateCoordinates(request)
-        return response
+        request = geocoding_pb2.CoordinateValidationRequest(lat=lat, lon=lon)
+        return await self.stub().ValidateCoordinates(request)
 
 
 class GRPCClients:
-    def __init__(self):
-        self.embedding_client = EmbeddingClient(settings.EMBEDDING_SERVICE_URL)
-        self.poi_client = POIClient(settings.POI_SERVICE_URL)
-        self.ranking_client = RankingClient(settings.RANKING_SERVICE_URL)
-        self.route_planner_client = RoutePlannerClient(settings.ROUTE_SERVICE_URL)
-        self.llm_client = LLMClient(settings.LLM_SERVICE_URL)
-        self.geocoding_client = GeocodingClient(settings.GEOCODING_SERVICE_URL)
+    def __init__(self) -> None:
+        self.embedding_client = EmbeddingClient()
+        self.poi_client = POIClient()
+        self.ranking_client = RankingClient()
+        self.route_planner_client = RoutePlannerClient()
+        self.llm_client = LLMClient()
+        self.geocoding_client = GeocodingClient()
+        self._clients: Tuple[GrpcClient[Any], ...] = (
+            self.embedding_client,
+            self.poi_client,
+            self.ranking_client,
+            self.route_planner_client,
+            self.llm_client,
+            self.geocoding_client,
+        )
 
-    async def connect_all(self):
-        """Connect to all gRPC services"""
-        await self.poi_client.connect()
-        await self.embedding_client.connect()
-        await self.ranking_client.connect()
-        await self.route_planner_client.connect()
-        await self.llm_client.connect()
-        await self.geocoding_client.connect()
+    async def connect_all(self) -> None:
+        for client in self._clients:
+            await client.connect()
 
-    async def close_all(self):
-        """Close all gRPC connections"""
-        await self.embedding_client.close()
-        await self.poi_client.close()
-        await self.ranking_client.close()
-        await self.route_planner_client.close()
-        await self.llm_client.close()
-        await self.geocoding_client.close()
+    async def close_all(self) -> None:
+        for client in self._clients:
+            await client.close()
 
     async def health_check(self) -> Dict[str, bool]:
-        """Check health of all services"""
-        return {
-            "embedding": self.embedding_client.stub is not None,
-            "poi": self.poi_client.stub is not None,
-            "ranking": self.ranking_client.stub is not None,
-            "route_planner": self.route_planner_client.stub is not None,
-            "llm": self.llm_client.stub is not None,
-            "geocoding": self.geocoding_client.stub is not None,
-        }
+        return {client.name.lower().replace(" ", "_"): client.is_ready() for client in self._clients}
 
 
 grpc_clients = GRPCClients()

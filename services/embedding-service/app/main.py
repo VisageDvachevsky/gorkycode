@@ -1,4 +1,5 @@
 import asyncio
+import asyncio
 import logging
 import sys
 from concurrent import futures
@@ -6,9 +7,9 @@ from concurrent import futures
 import grpc
 from prometheus_client import start_http_server
 
+from app.core.config import settings
 from app.proto import embedding_pb2_grpc
 from app.services.embedding import EmbeddingServicer
-from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,9 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 async def serve():
-    """Start gRPC server"""
     logger.info("🚀 Starting Embedding Service...")
-    logger.info(f"Model: {settings.EMBEDDING_MODEL}")
+    logger.info("Model: %s", settings.EMBEDDING_MODEL)
     
     start_http_server(9090)
     logger.info("✓ Prometheus metrics exposed on :9090")
@@ -42,7 +42,7 @@ async def serve():
     
     server.add_insecure_port(f'[::]:{settings.GRPC_PORT}')
     
-    logger.info(f"✅ Embedding Service listening on port {settings.GRPC_PORT}")
+    logger.info("✅ Embedding Service listening on port %s", settings.GRPC_PORT)
     
     await server.start()
     await server.wait_for_termination()

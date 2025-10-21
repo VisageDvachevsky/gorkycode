@@ -51,9 +51,7 @@ export default function StepReview({ formData, categories }: Props) {
         </p>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Interests */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -91,7 +89,6 @@ export default function StepReview({ formData, categories }: Props) {
           )}
         </motion.div>
 
-        {/* Duration & Style */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -128,7 +125,6 @@ export default function StepReview({ formData, categories }: Props) {
           </div>
         </motion.div>
 
-        {/* Location */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -161,7 +157,6 @@ export default function StepReview({ formData, categories }: Props) {
           )}
         </motion.div>
 
-        {/* Preferences */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -205,7 +200,6 @@ export default function StepReview({ formData, categories }: Props) {
         </motion.div>
       </div>
 
-      {/* Success Message */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -228,7 +222,6 @@ export default function StepReview({ formData, categories }: Props) {
         </div>
       </motion.div>
 
-      {/* Features Preview */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { icon: '🗺️', text: 'Реальные дороги' },

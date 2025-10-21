@@ -1,11 +1,12 @@
 import logging
 import sys
+import time
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
-import time
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -22,20 +23,18 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown events"""
-    logger.info("🚀 Starting API Gateway...")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    
+    logger.info("Starting API Gateway")
+    logger.info("Environment: %s", settings.ENVIRONMENT)
+
     await grpc_clients.connect_all()
-    logger.info("✓ Connected to all gRPC services")
-    
-    logger.info("✅ API Gateway ready!")
+    logger.info("Connected to all gRPC services")
+    logger.info("API Gateway ready")
     
     yield
     
-    logger.info("Shutting down API Gateway...")
+    logger.info("Shutting down API Gateway")
     await grpc_clients.close_all()
-    logger.info("✅ Cleanup complete")
+    logger.info("Cleanup complete")
 
 
 app = FastAPI(
@@ -77,7 +76,6 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for K8s probes"""
     return {
         "status": "healthy",
         "service": "api-gateway",
@@ -87,11 +85,10 @@ async def health_check():
 
 @app.get("/ready")
 async def readiness_check():
-    """Readiness check - verifies gRPC connections"""
     services_status = await grpc_clients.health_check()
-    
+
     all_healthy = all(services_status.values())
-    
+
     return {
         "ready": all_healthy,
         "services": services_status
@@ -100,9 +97,10 @@ async def readiness_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.ENVIRONMENT == "development"
+        reload=settings.ENVIRONMENT == "development",
     )

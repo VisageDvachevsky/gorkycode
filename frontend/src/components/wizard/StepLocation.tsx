@@ -2,17 +2,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { MapPin, Navigation, Search } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
 import type { RouteRequest } from '../../types'
 import 'leaflet/dist/leaflet.css'
-
-// Fix Leaflet default icon
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-})
+import '../../lib/leaflet'
 
 interface Props {
   formData: Partial<RouteRequest>
@@ -80,7 +72,6 @@ export default function StepLocation({ formData, updateFormData }: Props) {
         </p>
       </div>
 
-      {/* Location Mode Selector */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {LOCATION_MODES.map((mode, index) => {
           const Icon = mode.icon
@@ -109,7 +100,6 @@ export default function StepLocation({ formData, updateFormData }: Props) {
         })}
       </div>
 
-      {/* Input Area */}
       <motion.div
         key={locationMode}
         initial={{ opacity: 0, x: 20 }}
@@ -232,7 +222,6 @@ export default function StepLocation({ formData, updateFormData }: Props) {
         )}
       </motion.div>
 
-      {/* Info Card */}
       <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-2 border-emerald-200 dark:border-emerald-800 rounded-xl p-5">
         <p className="text-sm text-emerald-900 dark:text-emerald-100">
           <span className="font-bold">💡 Совет:</span> Если выберете центр города, AI построит компактный маршрут с известными местами. Если укажете окраину — добавит уникальные локации поблизости

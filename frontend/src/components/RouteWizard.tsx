@@ -108,7 +108,6 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Header */}
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
@@ -130,7 +129,6 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
             </div>
           </div>
 
-          {/* Progress bar */}
           <div className="mt-4">
             <div className="flex justify-between mb-2">
               {STEPS.map((step, index) => (
@@ -173,7 +171,6 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <AnimatePresence mode="wait">
@@ -220,7 +217,6 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
             </motion.div>
           </AnimatePresence>
 
-          {/* Navigation */}
           <div className="mt-8 flex justify-between items-center gap-4">
             <button
               onClick={handlePrev}
@@ -263,7 +259,6 @@ export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
             )}
           </div>
 
-          {/* Error Display */}
           {mutation.isError && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}

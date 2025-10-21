@@ -43,3 +43,4 @@ async def generate_embedding_endpoint(request: EmbeddingRequest) -> EmbeddingRes
         dimension=response.dimension or len(vector),
         from_cache=response.from_cache,
     )
+

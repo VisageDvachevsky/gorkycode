@@ -19,8 +19,8 @@ export interface RouteRequest {
   coffee_preferences?: CoffeePreferences
   intensity: 'relaxed' | 'medium' | 'intense'
   allow_transit?: boolean
-  start_time?: string  // HH:MM format
-  client_timezone?: string  // IANA timezone
+  start_time?: string
+  client_timezone?: string
 }
 
 export interface POIInRoute {
@@ -35,7 +35,6 @@ export interface POIInRoute {
   arrival_time: string
   leave_time: string
   is_coffee_break: boolean
-  // NEW FIELDS
   is_open?: boolean
   opening_hours?: string
 }

@@ -3,8 +3,6 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
-    
-    # gRPC Service URLs
     EMBEDDING_SERVICE_URL: str = "embedding-service:50051"
     RANKING_SERVICE_URL: str = "ranking-service:50052"
     ROUTE_SERVICE_URL: str = "route-planner-service:50053"

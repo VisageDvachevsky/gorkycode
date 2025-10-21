@@ -1,5 +1,3 @@
-"""Transit assistance for the route planner service."""
-
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 class TransitAdvisor:
-    """Suggests public transport legs using 2GIS (with Navitia fallback)."""
 
     NAVITIA_BASE_URL = "https://api.navitia.io/v1"
 
@@ -42,10 +39,14 @@ class TransitAdvisor:
     async def _get_cached(
         self, start: Tuple[float, float], end: Tuple[float, float]
     ) -> Optional[Dict[str, Any]]:
-        if not self.redis_client:
+        client = self.redis_client
+        if not client:
             await self.connect_redis()
+            client = self.redis_client
+        if not client:
+            return None
 
-        cached = await self.redis_client.get(self._cache_key(start, end))  # type: ignore[arg-type]
+        cached = await client.get(self._cache_key(start, end))
         if cached:
             return json.loads(cached)
         return None
@@ -53,17 +54,18 @@ class TransitAdvisor:
     async def _set_cache(
         self, start: Tuple[float, float], end: Tuple[float, float], value: Dict[str, Any]
     ) -> None:
-        if not self.redis_client:
+        client = self.redis_client
+        if not client:
             await self.connect_redis()
+            client = self.redis_client
+        if not client:
+            return
 
-        await self.redis_client.set(  # type: ignore[arg-type]
-            self._cache_key(start, end), json.dumps(value), ex=1800
-        )
+        await client.set(self._cache_key(start, end), json.dumps(value), ex=1800)
 
     async def suggest_transit(
         self, start: Tuple[float, float], end: Tuple[float, float]
     ) -> Optional[Dict[str, Any]]:
-        """Return rich information about the best public transport option."""
 
         crow_distance = twogis_client.calculate_distance(*start, *end)
         if crow_distance < self.distance_threshold_km:
@@ -73,7 +75,6 @@ class TransitAdvisor:
         if cached:
             return cached
 
-        # 1) Try 2GIS public transport API first.
         try:
             raw_transit = await twogis_client.get_public_transport_route(start, end)
             parsed = twogis_client.parse_transit_route(raw_transit)
@@ -92,10 +93,9 @@ class TransitAdvisor:
                 )
                 await self._set_cache(start, end, parsed)
                 return parsed
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             logger.warning("2GIS public transport lookup failed: %s", exc)
 
-        # 2) Fallback to Navitia if available.
         if not self.navitia_api_key:
             return None
 

@@ -1,4 +1,6 @@
 import asyncio
+import asyncio
+import asyncio
 import logging
 import sys
 from concurrent import futures
@@ -6,9 +8,9 @@ from concurrent import futures
 import grpc
 from prometheus_client import start_http_server
 
+from app.core.config import settings
 from app.proto import llm_pb2_grpc
 from app.services.llm import LLMServicer
-from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,10 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 async def serve():
-    """Start gRPC server"""
     logger.info("🚀 Starting LLM Service...")
-    logger.info(f"Provider: {settings.LLM_PROVIDER}")
-    logger.info(f"Model: {settings.LLM_MODEL}")
+    logger.info("Provider: %s", settings.LLM_PROVIDER)
+    logger.info("Model: %s", settings.LLM_MODEL)
 
     start_http_server(9090)
     logger.info("✓ Prometheus metrics exposed on :9090")
@@ -43,7 +44,7 @@ async def serve():
 
     server.add_insecure_port(f'[::]:{settings.GRPC_PORT}')
 
-    logger.info(f"✅ LLM Service listening on port {settings.GRPC_PORT}")
+    logger.info("✅ LLM Service listening on port %s", settings.GRPC_PORT)
 
     await server.start()
     await server.wait_for_termination()

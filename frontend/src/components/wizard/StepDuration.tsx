@@ -61,7 +61,6 @@ export default function StepDuration({ formData, updateFormData }: Props) {
         </p>
       </div>
 
-      {/* Duration Selection */}
       <div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">
           <Clock className="w-4 h-4 text-purple-600" />
@@ -95,7 +94,6 @@ export default function StepDuration({ formData, updateFormData }: Props) {
           })}
         </div>
 
-        {/* Custom Duration Slider */}
         <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-900 rounded-xl">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -124,7 +122,6 @@ export default function StepDuration({ formData, updateFormData }: Props) {
         </div>
       </div>
 
-      {/* Social Mode */}
       <div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">
           <Users className="w-4 h-4 text-blue-600" />
@@ -158,7 +155,6 @@ export default function StepDuration({ formData, updateFormData }: Props) {
         </div>
       </div>
 
-      {/* Intensity Level */}
       <div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">
           <Zap className="w-4 h-4 text-orange-600" />
@@ -192,7 +188,6 @@ export default function StepDuration({ formData, updateFormData }: Props) {
         </div>
       </div>
 
-      {/* Info Card */}
       <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-xl p-5">
         <p className="text-sm text-purple-900 dark:text-purple-100">
           <span className="font-bold">💡 Помните:</span> AI оптимизирует маршрут под ваши параметры, учитывая время на осмотр каждого места и переходы между ними

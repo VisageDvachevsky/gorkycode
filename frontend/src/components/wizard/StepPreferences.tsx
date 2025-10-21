@@ -46,7 +46,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
         </p>
       </div>
 
-      {/* Smart Coffee Breaks */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,7 +95,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
               transition={{ duration: 0.3 }}
               className="mt-6 space-y-6 overflow-hidden"
             >
-              {/* Interval Slider */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -124,7 +122,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
                 </div>
               </div>
 
-              {/* Advanced Settings Toggle */}
               <button
                 type="button"
                 onClick={() => setShowCoffeeAdvanced(!showCoffeeAdvanced)}
@@ -146,7 +143,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
                     exit={{ height: 0, opacity: 0 }}
                     className="space-y-4 overflow-hidden"
                   >
-                    {/* Cuisine & Dietary */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -182,7 +178,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
                       </div>
                     </div>
 
-                    {/* Additional Filters */}
                     <div className="flex flex-wrap gap-3">
                       <label className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer hover:border-amber-500 transition-all">
                         <input
@@ -215,7 +210,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
         </AnimatePresence>
       </motion.div>
 
-      {/* Public Transit */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -258,7 +252,6 @@ export default function StepPreferences({ formData, updateFormData }: Props) {
         </label>
       </motion.div>
 
-      {/* Info Card */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-5">
         <p className="text-sm text-blue-900 dark:text-blue-100">
           <span className="font-bold">💡 Все настройки опциональны:</span> AI создаст отличный маршрут даже с базовыми параметрами
