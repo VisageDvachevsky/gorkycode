@@ -17,6 +17,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "{{ .Values.rankingService.metricsPort }}"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
       - name: ranking-service
@@ -43,12 +44,14 @@ spec:
         resources:
           {{- toYaml .Values.rankingService.resources | nindent 12 }}
         livenessProbe:
-          tcpSocket:
-            port: grpc
+          httpGet:
+            path: /healthz
+            port: metrics
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
-          tcpSocket:
-            port: grpc
+          httpGet:
+            path: /readyz
+            port: metrics
           initialDelaySeconds: 10
           periodSeconds: 5
