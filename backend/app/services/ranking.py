@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.poi import POI
 from app.services.embedding import embedding_service
+from app.services.twogis_client import twogis_client
 
 
 class RankingService:
@@ -37,6 +38,12 @@ class RankingService:
             "museum": 1.2, "streetart": 1.3, "architecture": 1.2,
             "art_object": 1.2, "sculpture": 1.1
         },
+    }
+
+    BASE_SPREAD_KM = {
+        "relaxed": 0.4,
+        "medium": 0.3,
+        "intense": 0.24,
     }
     
     async def rank_pois(
@@ -72,7 +79,7 @@ class RankingService:
             scored_pois.append((poi, final_score))
         
         scored_pois.sort(key=lambda x: x[1], reverse=True)
-        return scored_pois[:top_k]
+        return self._select_diverse_pois(scored_pois, intensity, top_k)
     
     def _get_category_boost(self, category: str, social_mode: str, intensity: str) -> float:
         boost = 1.0
@@ -82,8 +89,76 @@ class RankingService:
         
         if intensity in self.INTENSITY_WEIGHTS:
             boost *= self.INTENSITY_WEIGHTS[intensity].get(category, 1.0)
-        
+
         return boost
+
+    def _select_diverse_pois(
+        self,
+        scored_pois: List[Tuple[POI, float]],
+        intensity: str,
+        top_k: int,
+    ) -> List[Tuple[POI, float]]:
+        if not scored_pois:
+            return []
+
+        base_threshold = self.BASE_SPREAD_KM.get(intensity, self.BASE_SPREAD_KM["medium"])
+        thresholds = [
+            base_threshold,
+            max(base_threshold * 0.75, 0.2),
+            max(base_threshold * 0.5, 0.14),
+            0.1,
+        ]
+
+        deduped_thresholds: List[float] = []
+        for value in thresholds:
+            value = round(value, 6)
+            if value <= 0:
+                continue
+            if not deduped_thresholds or value < deduped_thresholds[-1]:
+                deduped_thresholds.append(value)
+
+        thresholds = deduped_thresholds
+
+        selected: List[Tuple[POI, float]] = []
+        selected_ids = set()
+
+        for threshold in thresholds:
+            if len(selected) >= top_k:
+                break
+
+            for poi, score in scored_pois:
+                if poi.id in selected_ids:
+                    continue
+
+                if self._is_far_enough(poi, selected, threshold):
+                    selected.append((poi, score))
+                    selected_ids.add(poi.id)
+
+                    if len(selected) >= top_k:
+                        break
+
+        return selected
+
+    def _is_far_enough(
+        self,
+        poi: POI,
+        selected: List[Tuple[POI, float]],
+        min_distance_km: float,
+    ) -> bool:
+        if min_distance_km <= 0.0 or not selected:
+            return True
+
+        for existing, _ in selected:
+            distance = twogis_client.calculate_distance(
+                poi.lat,
+                poi.lon,
+                existing.lat,
+                existing.lon,
+            )
+            if distance < min_distance_km:
+                return False
+
+        return True
 
 
 ranking_service = RankingService()

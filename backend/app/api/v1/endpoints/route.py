@@ -91,12 +91,13 @@ async def plan_route(
     logger.info(f"Embedding generated (cached: {from_cache})")
     
     logger.info(f"Ranking POIs (categories: {request.categories or 'all'})...")
+    candidate_pool = max(20, min(60, int(request.hours * 8) + 12))
     scored_pois = await ranking_service.rank_pois(
         session=session,
         user_embedding=user_embedding,
         social_mode=request.social_mode,
         intensity=request.intensity,
-        top_k=20,
+        top_k=candidate_pool,
         categories_filter=request.categories,
     )
     
@@ -254,7 +255,11 @@ async def plan_route(
     except Exception as e:
         logger.error(f"Route geometry calculation failed: {str(e)}")
         route_geometry = [[start_lat, start_lon]] + [[poi.lat, poi.lon] for poi in optimized_route]
-    
+
+    geometry_distance = routing_service.distance_from_geometry(route_geometry)
+    if geometry_distance:
+        total_distance = geometry_distance
+
     # === 9. COLLECT NOTES & WARNINGS ===
     notes = llm_response.get("notes", [])
     

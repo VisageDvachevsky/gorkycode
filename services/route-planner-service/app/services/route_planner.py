@@ -21,6 +21,12 @@ CoordinateTuple = Tuple[float, float]
 
 
 class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
+    CLUSTER_DISTANCE_BY_INTENSITY: Dict[str, float] = {
+        "relaxed": 0.4,
+        "medium": 0.3,
+        "intense": 0.22,
+    }
+
     INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "relaxed": {
             "walk_speed_multiplier": 0.85,
@@ -78,6 +84,15 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             start_point: CoordinateTuple = (request.start_lat, request.start_lon)
             available_minutes = request.available_hours * 60
             intensity = (request.intensity or "medium").lower()
+
+            filtered_pois = self._filter_dense_pois(pois, intensity)
+            if len(filtered_pois) < len(pois):
+                logger.info(
+                    "Filtered dense cluster of POIs: %s → %s",
+                    len(pois),
+                    len(filtered_pois),
+                )
+            pois = filtered_pois
 
             matrix = await self._build_distance_matrix(start_point, pois)
             if matrix is None:
@@ -164,6 +179,74 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
     # ------------------------------------------------------------------
     # Matrix helpers
     # ------------------------------------------------------------------
+
+    def _filter_dense_pois(
+        self,
+        pois: Sequence[route_pb2.POIInfo],
+        intensity: str,
+    ) -> List[route_pb2.POIInfo]:
+        if len(pois) <= 1:
+            return list(pois)
+
+        base_threshold = self.CLUSTER_DISTANCE_BY_INTENSITY.get(
+            intensity,
+            self.CLUSTER_DISTANCE_BY_INTENSITY["medium"],
+        )
+        thresholds = [
+            base_threshold,
+            max(base_threshold * 0.75, 0.2),
+            max(base_threshold * 0.5, 0.14),
+            0.1,
+        ]
+
+        deduped_thresholds: List[float] = []
+        for value in thresholds:
+            value = round(value, 6)
+            if value <= 0:
+                continue
+            if not deduped_thresholds or value < deduped_thresholds[-1]:
+                deduped_thresholds.append(value)
+
+        thresholds = deduped_thresholds
+
+        selected: List[route_pb2.POIInfo] = []
+        selected_ids = set()
+
+        for threshold in thresholds:
+            for poi in pois:
+                if poi.id in selected_ids:
+                    continue
+
+                if self._is_far_enough(poi, selected, threshold):
+                    selected.append(poi)
+                    selected_ids.add(poi.id)
+
+                    if len(selected) >= len(pois):
+                        break
+
+            if len(selected) >= len(pois):
+                break
+
+        return selected if selected else list(pois)
+
+    def _is_far_enough(
+        self,
+        poi: route_pb2.POIInfo,
+        selected: Sequence[route_pb2.POIInfo],
+        min_distance_km: float,
+    ) -> bool:
+        if min_distance_km <= 0.0 or not selected:
+            return True
+
+        for existing in selected:
+            distance = geodesic(
+                (poi.lat, poi.lon),
+                (existing.lat, existing.lon),
+            ).km
+            if distance < min_distance_km:
+                return False
+
+        return True
 
     async def _build_distance_matrix(
         self, start_point: CoordinateTuple, pois: Sequence[route_pb2.POIInfo]

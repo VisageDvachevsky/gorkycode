@@ -87,6 +87,19 @@ class RoutingService:
         
         logger.warning("⚠ Fallback to straight lines")
         return [[lat, lon] for lat, lon in all_points]
+
+    def distance_from_geometry(self, geometry: List[List[float]]) -> float:
+        if not geometry or len(geometry) < 2:
+            return 0.0
+
+        total = 0.0
+        prev_lat, prev_lon = geometry[0]
+
+        for lat, lon in geometry[1:]:
+            total += self.calculate_distance_km(prev_lat, prev_lon, lat, lon)
+            prev_lat, prev_lon = lat, lon
+
+        return total
     
     async def get_route_distance(
         self,

@@ -14,6 +14,12 @@ logger = logging.getLogger(__name__)
 
 
 class RoutePlanner:
+    CLUSTER_DISTANCE_BY_INTENSITY: Dict[str, float] = {
+        "relaxed": 0.4,
+        "medium": 0.3,
+        "intense": 0.22,
+    }
+
     INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "relaxed": {
             "walk_speed_multiplier": 0.85,
@@ -64,9 +70,18 @@ class RoutePlanner:
     ) -> Tuple[List[POI], float]:
         if not pois:
             return [], 0.0
-        
+
         available_minutes = available_hours * 60
-        
+
+        filtered_pois = self._filter_dense_clusters(pois, intensity)
+        if len(filtered_pois) < len(pois):
+            logger.info(
+                "Filtered dense cluster of POIs: %s → %s",
+                len(pois),
+                len(filtered_pois),
+            )
+        pois = filtered_pois
+
         # Smart reordering: prefer starting from furthest point
         pois = self._reorder_pois_by_sectors(start_lat, start_lon, pois)
         
@@ -102,6 +117,73 @@ class RoutePlanner:
         logger.info(f"✓ Optimized route: {len(ordered_route)} POIs, {final_distance:.2f}km (real roads)")
         
         return ordered_route, final_distance
+
+    def _filter_dense_clusters(self, pois: List[POI], intensity: str) -> List[POI]:
+        if len(pois) <= 1:
+            return pois
+
+        base_threshold = self.CLUSTER_DISTANCE_BY_INTENSITY.get(
+            intensity,
+            self.CLUSTER_DISTANCE_BY_INTENSITY["medium"],
+        )
+        thresholds = [
+            base_threshold,
+            max(base_threshold * 0.75, 0.2),
+            max(base_threshold * 0.5, 0.14),
+            0.1,
+        ]
+
+        # Ensure thresholds are strictly decreasing and positive
+        deduped_thresholds: List[float] = []
+        for value in thresholds:
+            value = round(value, 6)
+            if value <= 0:
+                continue
+            if not deduped_thresholds or value < deduped_thresholds[-1]:
+                deduped_thresholds.append(value)
+
+        thresholds = deduped_thresholds
+
+        selected: List[POI] = []
+        selected_ids = set()
+
+        for threshold in thresholds:
+            for poi in pois:
+                if poi.id in selected_ids:
+                    continue
+
+                if self._is_far_enough(poi, selected, threshold):
+                    selected.append(poi)
+                    selected_ids.add(poi.id)
+
+                    if len(selected) >= len(pois):
+                        break
+
+            if len(selected) >= len(pois):
+                break
+
+        return selected if selected else pois
+
+    def _is_far_enough(
+        self,
+        poi: POI,
+        selected: List[POI],
+        min_distance_km: float,
+    ) -> bool:
+        if min_distance_km <= 0.0 or not selected:
+            return True
+
+        for existing in selected:
+            distance = twogis_client.calculate_distance(
+                poi.lat,
+                poi.lon,
+                existing.lat,
+                existing.lon,
+            )
+            if distance < min_distance_km:
+                return False
+
+        return True
     
     def _reorder_pois_by_sectors(
         self,
