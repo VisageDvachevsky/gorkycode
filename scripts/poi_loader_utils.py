@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-__all__ = ["PoiDataError", "resolve_poi_json_path", "load_poi_data"]
+__all__ = [
+    "PoiDataError",
+    "ensure_project_root",
+    "ensure_pythonpath",
+    "resolve_poi_json_path",
+    "load_poi_data",
+]
 
 
 class PoiDataError(RuntimeError):
@@ -16,9 +23,79 @@ class PoiDataError(RuntimeError):
         self.checked: List[Path] = list(checked or [])
 
 
+def ensure_pythonpath(*paths: os.PathLike[str] | str) -> None:
+    """Ensure the provided directories are present on ``sys.path``.
+
+    Paths that do not exist are ignored silently to keep the helper resilient in
+    container environments where optional directories might be absent.
+    """
+
+    for path in paths:
+        if not path:
+            continue
+        candidate = Path(path).expanduser()
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_dir():
+            str_path = str(resolved)
+            if str_path not in sys.path:
+                sys.path.insert(0, str_path)
+
+
+def ensure_project_root(*hints: os.PathLike[str] | str) -> Path:
+    """Detect and export the project root path.
+
+    ``PROJECT_ROOT`` is determined using (in priority order):
+
+    1. The current value of the ``PROJECT_ROOT`` environment variable.
+    2. Explicit hints provided to the function.
+    3. Ancestors of this utility module and the current working directory.
+    4. ``/app`` as a common default inside our containers.
+
+    The first directory containing either ``data/`` or ``app/`` wins.  When no
+    suitable directory is found we fall back to the parent of the ``scripts/``
+    directory that houses this module.
+    """
+
+    scripts_dir = Path(__file__).resolve().parent
+
+    candidates: list[Path] = []
+
+    env_value = os.getenv("PROJECT_ROOT")
+    if env_value:
+        candidates.append(Path(env_value).expanduser())
+
+    for hint in hints:
+        if hint:
+            candidates.append(Path(hint))
+
+    candidates.extend(parent for parent in scripts_dir.parents)
+    candidates.append(Path.cwd())
+    candidates.append(Path("/app"))
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.expanduser().resolve()
+        except OSError:
+            continue
+
+        if not resolved.exists():
+            continue
+
+        if (resolved / "data").is_dir() or (resolved / "app").is_dir():
+            os.environ.setdefault("PROJECT_ROOT", str(resolved))
+            return resolved
+
+    fallback = scripts_dir.parent.resolve()
+    os.environ.setdefault("PROJECT_ROOT", str(fallback))
+    return fallback
+
+
 def _iter_candidate_paths(additional: Iterable[os.PathLike[str] | str] | None = None) -> Iterable[Path]:
     scripts_dir = Path(__file__).resolve().parent
-    repo_root = scripts_dir.parent
+    repo_root = Path(os.getenv("PROJECT_ROOT") or scripts_dir.parent)
     cwd = Path.cwd()
 
     env_candidates: list[Path] = []
@@ -26,6 +103,10 @@ def _iter_candidate_paths(additional: Iterable[os.PathLike[str] | str] | None = 
         env_value = os.getenv(env_name)
         if env_value:
             env_candidates.append(Path(env_value).expanduser())
+
+    project_root_env = os.getenv("PROJECT_ROOT")
+    if project_root_env:
+        env_candidates.append(Path(project_root_env).expanduser() / "data" / "poi.json")
 
     default_candidates = [
         scripts_dir / "poi.json",
