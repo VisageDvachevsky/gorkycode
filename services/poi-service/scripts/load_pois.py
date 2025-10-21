@@ -21,6 +21,17 @@ def _add_sys_path(path: Path) -> None:
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
 
+
+def _detect_project_root() -> Path:
+    for ancestor in SCRIPT_PATH.parents:
+        if (ancestor / "data").is_dir():
+            return ancestor
+    return SCRIPT_DIR.parent
+
+
+PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT") or _detect_project_root())
+os.environ.setdefault("PROJECT_ROOT", str(PROJECT_ROOT))
+
 # Ensure both the local service scripts directory and the repository-level
 # ``scripts`` directory are importable regardless of build context.
 _add_sys_path(SCRIPT_DIR)

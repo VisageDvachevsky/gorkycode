@@ -18,7 +18,7 @@ class PoiDataError(RuntimeError):
 
 def _iter_candidate_paths(additional: Iterable[os.PathLike[str] | str] | None = None) -> Iterable[Path]:
     scripts_dir = Path(__file__).resolve().parent
-    repo_root = scripts_dir.parent
+    repo_root = Path(os.getenv("PROJECT_ROOT") or scripts_dir.parent)
     cwd = Path.cwd()
 
     env_candidates: list[Path] = []
@@ -26,6 +26,10 @@ def _iter_candidate_paths(additional: Iterable[os.PathLike[str] | str] | None = 
         env_value = os.getenv(env_name)
         if env_value:
             env_candidates.append(Path(env_value).expanduser())
+
+    project_root_env = os.getenv("PROJECT_ROOT")
+    if project_root_env:
+        env_candidates.append(Path(project_root_env).expanduser() / "data" / "poi.json")
 
     default_candidates = [
         scripts_dir / "poi.json",

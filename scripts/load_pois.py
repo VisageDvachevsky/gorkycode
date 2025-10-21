@@ -9,6 +9,11 @@ from typing import Iterable, List, Sequence
 
 import asyncpg
 
+
+SCRIPTS_DIR = Path(__file__).resolve().parent
+DEFAULT_PROJECT_ROOT = SCRIPTS_DIR.parent
+os.environ.setdefault("PROJECT_ROOT", str(DEFAULT_PROJECT_ROOT))
+
 # ============================================================================
 # POI Loader Utilities (merged from poi_loader_utils)
 # ============================================================================
@@ -22,13 +27,16 @@ class PoiDataError(RuntimeError):
 
 def _iter_candidate_paths(additional: Iterable[os.PathLike[str] | str] | None = None) -> Iterable[Path]:
     scripts_dir = Path(__file__).resolve().parent
-    repo_root = scripts_dir.parent
+    repo_root = Path(os.getenv("PROJECT_ROOT") or scripts_dir.parent)
     cwd = Path.cwd()
     env_candidates: list[Path] = []
     for env_name in ("POI_JSON_PATH", "POI_DATA_PATH"):
         env_value = os.getenv(env_name)
         if env_value:
             env_candidates.append(Path(env_value).expanduser())
+    project_root_env = os.getenv("PROJECT_ROOT")
+    if project_root_env:
+        env_candidates.append(Path(project_root_env).expanduser() / "data" / "poi.json")
     default_candidates = [
         scripts_dir / "poi.json",
         repo_root / "data" / "poi.json",
@@ -139,7 +147,7 @@ async def load_pois() -> None:
 
     print("🔌 Connecting to database...")
     try:
-        conn = await asyncpg.connect(database_url, record_class=None)
+        conn = await asyncpg.connect(database_url)
     except Exception as exc:  # pragma: no cover - CLI output
         print(f"❌ Database connection failed: {exc}")
         sys.exit(1)
