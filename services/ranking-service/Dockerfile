@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir poetry==1.7.1
 
 COPY services/ranking-service/pyproject.toml services/ranking-service/poetry.lock* ./
+COPY services/python-common /python-common
 
 RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-root --no-interaction --no-ansi
@@ -18,16 +19,11 @@ FROM base AS production
 
 WORKDIR /app
 
-# Copy proto files
 COPY proto/ ./proto/
-
-# Copy service code
 COPY services/ranking-service/app ./app
 
-# Create proto directory
 RUN mkdir -p ./app/proto
 
-# Generate proto files
 RUN pip install grpcio-tools && \
     python -m grpc_tools.protoc \
         -I./proto \
@@ -36,7 +32,6 @@ RUN pip install grpcio-tools && \
         --pyi_out=./app/proto \
         ./proto/*.proto
 
-# Fix imports
 RUN find ./app/proto -name "*_pb2_grpc.py" -exec sed -i 's/^import \([a-z_]*\)_pb2/from . import \1_pb2/' {} \;
 
 RUN touch ./app/proto/__init__.py

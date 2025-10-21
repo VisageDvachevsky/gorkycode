@@ -3,7 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     GRPC_PORT: int = 50051
-    
+    METRICS_PORT: int = 9090
+
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     
     REDIS_URL: str = "redis://redis:6379/0"

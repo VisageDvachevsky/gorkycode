@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import base64
+import json
 import logging
 from datetime import datetime, timedelta
 from math import atan2, cos, radians, sin, sqrt
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+
+import httpx
 
 from fastapi import APIRouter, HTTPException
 
@@ -30,23 +34,87 @@ DEFAULT_VISIT_MINUTES = 45
 
 INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
     "relaxed": {
-        "walk_speed_multiplier": 0.85,
-        "visit_duration_multiplier": 1.3,
-        "min_visit_minutes": 25,
-        "max_visit_minutes": 75,
+        "target_per_hour": 1.1,
+        "default_visit_minutes": 55.0,
+        "min_visit_minutes": 40.0,
+        "max_visit_minutes": 90.0,
+        "transition_padding": 8.0,
+        "safety_buffer": 20.0,
     },
     "medium": {
-        "walk_speed_multiplier": 1.0,
-        "visit_duration_multiplier": 1.0,
-        "min_visit_minutes": 20,
-        "max_visit_minutes": 60,
+        "target_per_hour": 1.6,
+        "default_visit_minutes": 42.0,
+        "min_visit_minutes": 30.0,
+        "max_visit_minutes": 70.0,
+        "transition_padding": 6.0,
+        "safety_buffer": 15.0,
     },
     "intense": {
-        "walk_speed_multiplier": 1.15,
-        "visit_duration_multiplier": 0.75,
-        "min_visit_minutes": 15,
-        "max_visit_minutes": 45,
+        "target_per_hour": 2.3,
+        "default_visit_minutes": 30.0,
+        "min_visit_minutes": 20.0,
+        "max_visit_minutes": 55.0,
+        "transition_padding": 4.0,
+        "safety_buffer": 10.0,
     },
+}
+
+STREET_ART_HINTS: Sequence[str] = (
+    "стрит",
+    "street",
+    "граффити",
+    "мурал",
+)
+HISTORY_HINTS: Sequence[str] = (
+    "истор",
+    "history",
+    "кремл",
+    "усадьб",
+)
+MORNING_AVOID_KEYWORDS: Sequence[str] = (
+    "кофе",
+    "coffee",
+    "кафе",
+    "бар",
+    "brunch",
+)
+NIGHT_UNSAFE_KEYWORDS: Sequence[str] = (
+    "сквер",
+    "тропа",
+    "двор",
+    "аллея",
+    "парк",
+)
+NIGHT_PREFERRED_KEYWORDS: Sequence[str] = (
+    "набереж",
+    "кремл",
+    "центр",
+    "площад",
+)
+CATEGORY_STREET_ART: Sequence[str] = (
+    "art_object",
+    "mosaic",
+    "decorative_art",
+)
+CATEGORY_HISTORY: Sequence[str] = (
+    "museum",
+    "monument",
+    "memorial",
+    "architecture",
+    "religious_site",
+    "sculpture",
+)
+EMOJI_BY_CATEGORY: Dict[str, str] = {
+    "museum": "🏛",
+    "monument": "🗿",
+    "memorial": "🕯",
+    "architecture": "🏰",
+    "religious_site": "⛪",
+    "sculpture": "🎭",
+    "art_object": "🎨",
+    "mosaic": "🧩",
+    "decorative_art": "🖼",
+    "park": "🌳",
 }
 
 
@@ -69,21 +137,257 @@ def _get_intensity_profile(intensity: str) -> Dict[str, float]:
     return INTENSITY_PROFILES.get(intensity, INTENSITY_PROFILES["medium"])
 
 
-def _minutes_from_distance(distance_km: float, intensity: str = "medium") -> float:
+def _transition_padding(intensity: str) -> float:
+    profile = _get_intensity_profile(intensity)
+    return float(profile.get("transition_padding", 5.0))
+
+
+def _safety_buffer(intensity: str) -> float:
+    profile = _get_intensity_profile(intensity)
+    return float(profile.get("safety_buffer", 0.0))
+
+
+def _minutes_from_distance(distance_km: float) -> float:
     if distance_km <= 0:
         return 0.0
-    profile = _get_intensity_profile(intensity)
-    walk_speed = max(0.5, WALK_SPEED_KMH * profile["walk_speed_multiplier"])
+    walk_speed = max(0.5, WALK_SPEED_KMH)
     return (distance_km / walk_speed) * 60.0
 
 
 def _effective_visit_minutes(base_minutes: Optional[int], intensity: str) -> int:
-    minutes = base_minutes or DEFAULT_VISIT_MINUTES
     profile = _get_intensity_profile(intensity)
-    adjusted = int(round(minutes * profile["visit_duration_multiplier"]))
-    min_minutes = int(profile["min_visit_minutes"])
-    max_minutes = int(profile["max_visit_minutes"])
-    return max(min_minutes, min(max_minutes, max(5, adjusted)))
+    default_visit = profile["default_visit_minutes"]
+    minutes = float(base_minutes or default_visit)
+    adjusted = (minutes + default_visit) / 2.0 if base_minutes else default_visit
+    min_minutes = profile["min_visit_minutes"]
+    max_minutes = profile["max_visit_minutes"]
+    bounded = max(min_minutes, min(max_minutes, adjusted))
+    return int(round(max(5.0, bounded)))
+
+
+def _normalize(text: Optional[str]) -> str:
+    return (text or "").lower()
+
+
+def _contains_keywords(values: Iterable[str], keywords: Sequence[str]) -> bool:
+    lowered = [_normalize(value) for value in values if value]
+    for value in lowered:
+        for keyword in keywords:
+            if keyword in value:
+                return True
+    return False
+
+
+def _apply_time_window_filters(pois: Sequence, start_hour: int) -> List:
+    entries = list(pois)
+    if not entries:
+        return entries
+
+    filtered: List = []
+    for poi in entries:
+        name = _normalize(getattr(poi, "name", ""))
+        tags = [tag.lower() for tag in getattr(poi, "tags", [])]
+        skip = False
+        if start_hour < 9 and _contains_keywords([name, *tags], MORNING_AVOID_KEYWORDS):
+            skip = True
+        if start_hour >= 21 and _contains_keywords([name, *tags], NIGHT_UNSAFE_KEYWORDS):
+            skip = True
+        if not skip:
+            filtered.append(poi)
+
+    if not filtered:
+        return entries
+
+    if start_hour >= 21:
+        filtered.sort(
+            key=lambda poi: (
+                _contains_keywords(
+                    [getattr(poi, "name", "")] + list(getattr(poi, "tags", [])),
+                    NIGHT_PREFERRED_KEYWORDS,
+                ),
+                getattr(poi, "rating", 0.0),
+            ),
+            reverse=True,
+        )
+
+    return filtered
+
+
+def _is_street_art_candidate(poi) -> bool:
+    category = _normalize(getattr(poi, "category", ""))
+    tags = [tag.lower() for tag in getattr(poi, "tags", [])]
+    if category in CATEGORY_STREET_ART:
+        return True
+    return _contains_keywords([getattr(poi, "name", ""), *tags], STREET_ART_HINTS)
+
+
+def _is_history_candidate(poi) -> bool:
+    category = _normalize(getattr(poi, "category", ""))
+    tags = [tag.lower() for tag in getattr(poi, "tags", [])]
+    if category in CATEGORY_HISTORY:
+        return True
+    return _contains_keywords([getattr(poi, "name", ""), *tags], HISTORY_HINTS)
+
+
+def _alternate_street_history_candidates(pois: Sequence) -> List:
+    entries = list(pois)
+    street_items = [poi for poi in entries if _is_street_art_candidate(poi)]
+    history_items = [poi for poi in entries if _is_history_candidate(poi)]
+
+    if not street_items or not history_items:
+        return entries
+
+    other_items = [
+        poi
+        for poi in entries
+        if poi not in street_items and poi not in history_items
+    ]
+
+    street_queue = street_items.copy()
+    history_queue = history_items.copy()
+    result: List = []
+    take_history = len(history_queue) >= len(street_queue)
+
+    while street_queue or history_queue:
+        if take_history and history_queue:
+            result.append(history_queue.pop(0))
+        elif street_queue:
+            result.append(street_queue.pop(0))
+        elif history_queue:
+            result.append(history_queue.pop(0))
+        take_history = not take_history
+
+    positions = {id(poi): index for index, poi in enumerate(entries)}
+
+    for item in other_items:
+        inserted = False
+        for index, existing in enumerate(result):
+            if positions[id(existing)] > positions[id(item)]:
+                result.insert(index, item)
+                inserted = True
+                break
+        if not inserted:
+            result.append(item)
+
+    return result
+
+
+def _needs_street_history_mix(request: RouteRequest) -> bool:
+    interests = [request.interests or ""]
+    if request.categories:
+        interests.extend(request.categories)
+    combined = " ".join(interests).lower()
+    return (
+        any(keyword in combined for keyword in STREET_ART_HINTS)
+        and any(keyword in combined for keyword in HISTORY_HINTS)
+    )
+
+
+def _emoji_for_poi(category: Optional[str], tags: Iterable[str], fallback: str = "📍") -> str:
+    category_key = (category or "").lower()
+    if category_key in EMOJI_BY_CATEGORY:
+        return EMOJI_BY_CATEGORY[category_key]
+    if _contains_keywords(tags, STREET_ART_HINTS):
+        return "🎨"
+    if _contains_keywords(tags, HISTORY_HINTS):
+        return "🏛"
+    return fallback
+
+
+def _generate_share_token(
+    summary: str, distance: float, minutes: int, poi_ids: Sequence[int]
+) -> str:
+    payload = {
+        "s": summary,
+        "d": round(distance, 2),
+        "t": minutes,
+        "p": list(poi_ids),
+    }
+    raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+async def _fetch_weather_advice(
+    lat: float, lon: float, highlight: Optional[str]
+) -> Optional[str]:
+    url = f"https://wttr.in/{lat},{lon}"
+    params = {"format": "j1"}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+    except Exception as exc:
+        logger.debug("Weather lookup skipped: %s", exc)
+        return None
+
+    try:
+        payload = response.json()
+        current_block = (payload.get("current_condition") or [None])[0] or {}
+        description = (
+            (current_block.get("weatherDesc") or [{}])[0].get("value", "")
+        ).strip()
+        temp_raw = current_block.get("temp_C") or current_block.get("tempC")
+        precip_raw = current_block.get("precipMM") or current_block.get("precip_mm")
+        wind_raw = current_block.get("windspeedKmph") or current_block.get("windspeed_kmph")
+    except Exception as exc:
+        logger.debug("Weather payload parsing failed: %s", exc)
+        return None
+
+    temp_value: Optional[float]
+    try:
+        temp_value = float(temp_raw)
+    except (TypeError, ValueError):
+        temp_value = None
+
+    try:
+        precip_value = float(precip_raw)
+    except (TypeError, ValueError):
+        precip_value = 0.0
+
+    try:
+        wind_value = float(wind_raw)
+    except (TypeError, ValueError):
+        wind_value = 0.0
+
+    fragments: List[str] = []
+
+    if precip_value >= 1.0:
+        fragments.append("Сегодня дождливо — возьмите зонт")
+    elif precip_value > 0.1:
+        fragments.append("Возможен лёгкий дождь, захватите ветровку")
+    elif wind_value >= 25:
+        fragments.append("На улице ветрено, планируйте уютные остановки")
+    elif description:
+        fragments.append(description.lower().capitalize())
+    else:
+        fragments.append("Погода располагает к прогулке")
+
+    if temp_value is not None:
+        temp_label = int(round(temp_value))
+        fragments.append(f"температура около {temp_label}°C")
+
+    if highlight:
+        fragments.append(f"но {highlight} всё равно впечатляет")
+
+    return ", ".join(fragments) + "."
+
+
+def _estimate_coffee_break_minutes(
+    total_minutes: float,
+    intensity: str,
+    preferences: Optional[CoffeePreferences],
+) -> float:
+    if not preferences or not preferences.enabled or total_minutes <= 0:
+        return 0.0
+    interval = max(30, preferences.interval_minutes)
+    if total_minutes < interval:
+        return 0.0
+    breaks = int(total_minutes // interval)
+    if breaks <= 0:
+        return 0.0
+    base_stay = max(15, min(30, interval // 3))
+    stay_minutes = _effective_visit_minutes(base_stay, intensity)
+    return float(breaks * stay_minutes)
 
 
 def _convert_transit_stop(stop_msg: route_pb2.TransitStop) -> Optional[TransitStopInfo]:
@@ -267,12 +571,13 @@ async def _maybe_add_coffee_break(
 
     cafe = min(cafes, key=lambda c: c.distance if c.distance else 0.0)
     walk_km = _haversine_km(current_lat, current_lon, cafe.lat, cafe.lon)
-    walk_minutes = _minutes_from_distance(walk_km, intensity)
+    walk_minutes = _minutes_from_distance(walk_km)
     arrival_time = cursor_time + timedelta(minutes=walk_minutes)
 
     stay_minutes = max(15, min(30, preferences.interval_minutes // 3))
     stay_minutes = _effective_visit_minutes(stay_minutes, intensity)
-    leave_time = arrival_time + timedelta(minutes=stay_minutes)
+    padding = _transition_padding(intensity)
+    leave_time = arrival_time + timedelta(minutes=stay_minutes + padding)
 
     why = (
         f"Сделайте паузу в {cafe.name}: уютное место неподалёку для кофе и отдыха."
@@ -294,6 +599,10 @@ async def _maybe_add_coffee_break(
         arrival_time=arrival_time,
         leave_time=leave_time,
         is_coffee_break=True,
+        category="coffee_break",
+        tags=["coffee", "break"],
+        emoji="☕",
+        distance_from_previous_km=round(walk_km, 2),
     )
 
     return coffee_item, leave_time, cafe.lat, cafe.lon, walk_km
@@ -342,8 +651,31 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         raise HTTPException(503, "Сервис ранжирования недоступен") from exc
 
     scored_pois = list(ranking_response)
+    scored_pois = _apply_time_window_filters(scored_pois, start_time.hour)
+    if _needs_street_history_mix(request):
+        scored_pois = _alternate_street_history_candidates(scored_pois)
     if not scored_pois:
         raise HTTPException(404, "Под ваши предпочтения не нашли подходящих мест")
+
+    total_available_minutes = float(request.hours * 60)
+    reserved_coffee_minutes = _estimate_coffee_break_minutes(
+        total_minutes=total_available_minutes,
+        intensity=request.intensity,
+        preferences=request.coffee_preferences,
+    )
+    safety_buffer = _safety_buffer(request.intensity)
+    effective_minutes = max(
+        15.0, total_available_minutes - reserved_coffee_minutes - safety_buffer
+    )
+    effective_hours = effective_minutes / 60.0
+
+    coffee_break_targets = 0
+    if request.coffee_preferences and request.coffee_preferences.enabled:
+        interval = max(30, request.coffee_preferences.interval_minutes)
+        if total_available_minutes >= interval:
+            coffee_break_targets = int(total_available_minutes // interval)
+            if coffee_break_targets <= 0 and reserved_coffee_minutes > 0:
+                coffee_break_targets = 1
 
     candidates = [
         route_pb2.POIInfo(
@@ -362,7 +694,7 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             start_lat=start_lat,
             start_lon=start_lon,
             pois=candidates,
-            available_hours=request.hours,
+            available_hours=effective_hours,
             intensity=request.intensity,
         )
     except Exception as exc:
@@ -419,6 +751,10 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
 
     if not ordered:
         raise HTTPException(404, "Не удалось собрать информацию по точкам маршрута")
+
+    if coffee_break_targets and ordered:
+        limit = max(1, len(ordered) // 2) if len(ordered) > 2 else 1
+        coffee_break_targets = min(coffee_break_targets, limit)
 
     movement_leg_msgs = list(route_plan.legs)
     movement_legs: List[RouteLegInstruction] = [
@@ -484,7 +820,9 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     initial_time = start_time
     current_lat, current_lon = start_lat, start_lon
     order_counter = 1
-    coffee_added = False
+    coffee_breaks_planned = 0
+    last_coffee_timestamp = initial_time
+    transition_padding = _transition_padding(request.intensity)
 
     for idx, item in enumerate(ordered):
         leg_distance = None
@@ -500,7 +838,7 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         if leg_distance is None:
             leg_distance = _haversine_km(current_lat, current_lon, item["lat"], item["lon"])
         if leg_duration is None:
-            leg_duration = _minutes_from_distance(leg_distance, request.intensity)
+            leg_duration = _minutes_from_distance(leg_distance)
 
         if leg_duration:
             cursor_time += timedelta(minutes=leg_duration)
@@ -510,7 +848,8 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         visit_minutes = item.get("effective_visit_minutes") or _effective_visit_minutes(
             item.get("avg_visit_minutes"), request.intensity
         )
-        leave_time = cursor_time + timedelta(minutes=visit_minutes)
+        visit_total = visit_minutes + transition_padding
+        leave_time = cursor_time + timedelta(minutes=visit_total)
 
         route_items.append(
             POIInRoute(
@@ -533,6 +872,10 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
                 arrival_time=cursor_time,
                 leave_time=leave_time,
                 is_coffee_break=False,
+                category=item.get("category"),
+                tags=item.get("tags", []),
+                emoji=_emoji_for_poi(item.get("category"), item.get("tags", [])),
+                distance_from_previous_km=round(leg_distance, 2),
             )
         )
 
@@ -543,28 +886,31 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         if (
             request.coffee_preferences
             and request.coffee_preferences.enabled
-            and not coffee_added
-            and (cursor_time - initial_time).total_seconds() / 60.0
-            >= request.coffee_preferences.interval_minutes
+            and coffee_breaks_planned < coffee_break_targets
         ):
-            coffee_data = await _maybe_add_coffee_break(
-                preferences=request.coffee_preferences,
-                current_lat=current_lat,
-                current_lon=current_lon,
-                cursor_time=cursor_time,
-                order_number=order_counter,
-                intensity=request.intensity,
-            )
-            if coffee_data:
-                coffee_item, new_cursor_time, coffee_lat, coffee_lon, walk_km_to_cafe = coffee_data
-                total_distance_km += walk_km_to_cafe
-                walking_distance_km += walk_km_to_cafe
-                extra_walking_km += walk_km_to_cafe
-                route_items.append(coffee_item)
-                cursor_time = new_cursor_time
-                current_lat, current_lon = coffee_lat, coffee_lon
-                order_counter += 1
-                coffee_added = True
+            elapsed_since_break = (
+                cursor_time - last_coffee_timestamp
+            ).total_seconds() / 60.0
+            if elapsed_since_break >= request.coffee_preferences.interval_minutes:
+                coffee_data = await _maybe_add_coffee_break(
+                    preferences=request.coffee_preferences,
+                    current_lat=current_lat,
+                    current_lon=current_lon,
+                    cursor_time=cursor_time,
+                    order_number=order_counter,
+                    intensity=request.intensity,
+                )
+                if coffee_data:
+                    coffee_item, new_cursor_time, coffee_lat, coffee_lon, walk_km_to_cafe = coffee_data
+                    total_distance_km += walk_km_to_cafe
+                    walking_distance_km += walk_km_to_cafe
+                    extra_walking_km += walk_km_to_cafe
+                    route_items.append(coffee_item)
+                    cursor_time = new_cursor_time
+                    current_lat, current_lon = coffee_lat, coffee_lon
+                    order_counter += 1
+                    coffee_breaks_planned += 1
+                    last_coffee_timestamp = new_cursor_time
 
     if planned_distance_km and total_distance_km < planned_distance_km:
         total_distance_km = planned_distance_km
@@ -600,10 +946,31 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     else:
         route_geometry = [[start_lat, start_lon]]
 
+    highlight_name = next(
+        (poi.name for poi in route_items if not poi.is_coffee_break),
+        None,
+    )
+    weather_advice = await _fetch_weather_advice(
+        start_lat,
+        start_lon,
+        highlight_name,
+    )
+
     notes: List[str] = [f"Старт: {start_label}"]
-    if coffee_added:
-        notes.append("Запланирована кофейная пауза по вашим предпочтениям")
+    if safety_buffer > 0:
+        notes.append(
+            f"Заложен буфер {int(round(safety_buffer))} мин на ориентирование и переходы"
+        )
+    if coffee_breaks_planned:
+        if coffee_breaks_planned == 1:
+            notes.append("Запланирована кофейная пауза по вашим предпочтениям")
+        else:
+            notes.append(
+                f"Запланированы {coffee_breaks_planned} кофейные паузы по вашим предпочтениям"
+            )
     notes.extend(notes_from_llm)
+    if weather_advice:
+        notes.append(weather_advice)
 
     time_limit_minutes = int(request.hours * 60)
     warnings: List[str] = []
@@ -611,6 +978,13 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         warnings.append(
             "Маршрут получился чуть длиннее указанного времени — скорректируйте длительность или интересы."
         )
+
+    share_token = _generate_share_token(
+        summary,
+        total_distance_km,
+        total_est_minutes,
+        [item.poi_id for item in route_items],
+    )
 
     response = RouteResponse(
         summary=summary,
@@ -625,6 +999,8 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         movement_legs=movement_legs,
         walking_distance_km=round(walking_distance_km, 2),
         transit_distance_km=round(transit_distance_km, 2),
+        weather_advice=weather_advice,
+        share_token=share_token,
     )
 
     return response

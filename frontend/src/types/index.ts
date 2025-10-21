@@ -15,7 +15,7 @@ export interface RouteRequest {
   start_lat?: number
   start_lon?: number
   start_address?: string
-  social_mode: 'solo' | 'friends' | 'family'
+  social_mode: 'solo' | 'friends' | 'family' | 'couple'
   coffee_preferences?: CoffeePreferences
   intensity: 'relaxed' | 'medium' | 'intense'
   allow_transit?: boolean
@@ -37,6 +37,10 @@ export interface POIInRoute {
   is_coffee_break: boolean
   is_open?: boolean
   opening_hours?: string
+  category?: string
+  tags?: string[]
+  emoji?: string
+  distance_from_previous_km?: number
 }
 
 export interface RouteResponse {
@@ -49,6 +53,8 @@ export interface RouteResponse {
   route_geometry?: number[][]
   start_time_used?: string
   time_warnings?: string[]
+  weather_advice?: string
+  share_token?: string
 }
 
 export interface Category {

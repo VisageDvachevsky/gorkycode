@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "ai-tourist-common"
+version = "0.1.0"
+description = "Shared telemetry utilities for AI Tourist services"
+authors = ["AI Tourist Team"]
+packages = [{ include = "ai_tourist_common" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+prometheus-client = "^0.19.0"
+
+[build-system]
+requires = ["poetry-core>=1.6.0"]
+build-backend = "poetry.core.masonry.api"

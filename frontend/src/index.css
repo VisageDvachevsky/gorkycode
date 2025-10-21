@@ -21,7 +21,7 @@
 }
 
 @layer utilities {
-  /* Gradient Animations */
+  
   @keyframes gradient {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
@@ -32,7 +32,7 @@
     animation: gradient 3s ease infinite;
   }
 
-  /* Glow Effect */
+  
   @keyframes pulse-glow {
     0%, 100% { opacity: 0.5; transform: scale(1); }
     50% { opacity: 0.8; transform: scale(1.05); }
@@ -42,7 +42,7 @@
     animation: pulse-glow 2s ease-in-out infinite;
   }
 
-  /* Bounce Slow */
+  
   @keyframes bounce-slow {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-10px); }
@@ -52,7 +52,7 @@
     animation: bounce-slow 2s ease-in-out infinite;
   }
 
-  /* Scroll Indicator */
+  
   @keyframes scroll {
     0% { transform: translateY(0); opacity: 1; }
     100% { transform: translateY(8px); opacity: 0; }
@@ -62,7 +62,7 @@
     animation: scroll 1.5s ease-in-out infinite;
   }
 
-  /* Fade In Animations */
+  
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -147,7 +147,7 @@
     animation: scale-in 0.4s ease-out;
   }
 
-  /* Shimmer Loading Effect */
+  
   @keyframes shimmer {
     0% { background-position: -1000px 0; }
     100% { background-position: 1000px 0; }
@@ -164,12 +164,12 @@
     background-size: 1000px 100%;
   }
 
-  /* Skeleton Loader */
+  
   .skeleton {
     @apply bg-gradient-to-r from-slate-200 via-slate-300 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 animate-shimmer;
   }
 
-  /* Glass Morphism */
+  
   .glass {
     @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-700/50;
   }
@@ -178,7 +178,7 @@
     @apply bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border border-white/30 dark:border-slate-700/70;
   }
 
-  /* Neumorphism */
+  
   .neumorphic {
     box-shadow: 
       8px 8px 16px rgba(0, 0, 0, 0.1),
@@ -191,7 +191,7 @@
       -8px -8px 16px rgba(255, 255, 255, 0.05);
   }
 
-  /* Floating Animation */
+  
   @keyframes float {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
     33% { transform: translateY(-10px) rotate(2deg); }
@@ -202,7 +202,7 @@
     animation: float 6s ease-in-out infinite;
   }
 
-  /* Ping Animation for notifications */
+  
   @keyframes ping-slow {
     75%, 100% {
       transform: scale(2);
@@ -214,7 +214,7 @@
     animation: ping-slow 2s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
 
-  /* Rotate slow for loading states */
+  
   @keyframes rotate-slow {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
@@ -224,7 +224,7 @@
     animation: rotate-slow 3s linear infinite;
   }
 
-  /* Custom Scrollbar */
+  
   ::-webkit-scrollbar {
     width: 12px;
     height: 12px;
@@ -244,17 +244,17 @@
     @apply bg-slate-400 dark:bg-slate-500;
   }
 
-  /* Selection */
+  
   ::selection {
     @apply bg-blue-500/30 text-blue-900 dark:text-blue-100;
   }
 
-  /* Focus visible improvements */
+  
   :focus-visible {
     @apply outline-none ring-4 ring-blue-500/50 ring-offset-2 ring-offset-white dark:ring-offset-slate-900;
   }
 
-  /* Map Polyline Animation */
+  
   @keyframes dash-offset {
     to {
       stroke-dashoffset: -40;
@@ -265,7 +265,7 @@
     animation: dash-offset 30s linear infinite;
   }
 
-  /* Leaflet Customization */
+  
   .leaflet-popup-content-wrapper {
     @apply rounded-2xl shadow-2xl border-2 border-slate-200 dark:border-slate-700;
   }
@@ -282,7 +282,7 @@
     @apply scale-110 z-50;
   }
 
-  /* Coffee Marker Special Effect */
+  
   .coffee-marker {
     @apply transition-all duration-300;
   }
@@ -292,7 +292,7 @@
     filter: drop-shadow(0 8px 16px rgba(245, 158, 11, 0.5));
   }
 
-  /* Print Styles */
+  
   @media print {
     .no-print {
       display: none !important;
@@ -308,7 +308,7 @@
     }
   }
 
-  /* Loading Skeleton Pulse */
+  
   @keyframes skeleton-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -318,7 +318,7 @@
     animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
-  /* Stagger Animation Helper Classes */
+  
   .stagger-1 { animation-delay: 0.1s; }
   .stagger-2 { animation-delay: 0.2s; }
   .stagger-3 { animation-delay: 0.3s; }
@@ -326,12 +326,12 @@
   .stagger-5 { animation-delay: 0.5s; }
   .stagger-6 { animation-delay: 0.6s; }
 
-  /* Gradient Text */
+  
   .gradient-text {
     @apply bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent;
   }
 
-  /* Hover Lift Effect */
+  
   .hover-lift {
     @apply transition-all duration-300;
   }
@@ -340,7 +340,7 @@
     @apply -translate-y-1 shadow-xl;
   }
 
-  /* Card Glow on Hover */
+  
   .card-glow {
     @apply relative overflow-hidden;
   }
@@ -354,7 +354,7 @@
     @apply translate-x-[200%];
   }
 
-  /* Responsive Text Sizes */
+  
   .text-fluid-xl {
     font-size: clamp(2rem, 5vw, 4rem);
   }
@@ -369,7 +369,7 @@
 }
 
 @layer components {
-  /* Button Variants */
+  
   .btn-primary {
     @apply px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all;
   }
@@ -382,12 +382,12 @@
     @apply px-4 py-2 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all;
   }
 
-  /* Input Styles */
+  
   .input-primary {
     @apply w-full px-4 py-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all;
   }
 
-  /* Card Styles */
+  
   .card {
     @apply bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 p-6 transition-all;
   }
@@ -396,7 +396,7 @@
     @apply card hover:shadow-2xl hover:-translate-y-1;
   }
 
-  /* Badge Styles */
+  
   .badge {
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
   }
