@@ -1,5 +1,3 @@
-"""Centralised logging configuration."""
-
 from __future__ import annotations
 
 import logging
@@ -18,7 +16,6 @@ class TraceIdFilter(logging.Filter):
 
 
 def configure_logging(service_name: str, level: int = logging.INFO) -> logging.Logger:
-    """Configure root logging with trace correlation."""
 
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(name)s | trace_id=%(trace_id)s | %(message)s"
@@ -36,6 +33,5 @@ def configure_logging(service_name: str, level: int = logging.INFO) -> logging.L
 
 
 def bind_logger(name: Optional[str] = None) -> logging.Logger:
-    """Convenience helper to obtain a configured logger."""
 
     return logging.getLogger(name)

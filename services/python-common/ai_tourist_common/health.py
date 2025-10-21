@@ -1,5 +1,3 @@
-"""HTTP probe server for metrics and health checks."""
-
 from __future__ import annotations
 
 import json

@@ -1,5 +1,3 @@
-"""gRPC interceptors for propagating trace ids."""
-
 from __future__ import annotations
 
 from typing import Awaitable, Callable, Optional
@@ -8,7 +6,7 @@ import grpc
 
 from .tracing import ensure_trace_id, reset_trace_id, set_trace_id
 
-Handler = grpc.aio.RpcMethodHandler
+Handler = grpc.RpcMethodHandler
 Continuation = Callable[[grpc.HandlerCallDetails], Awaitable[Optional[Handler]]]
 
 
@@ -44,11 +42,7 @@ class TraceIdInterceptor(grpc.aio.ServerInterceptor):
             finally:
                 reset_trace_id(token)
 
-        return grpc.aio.unary_unary_rpc_method_handler(
-            call,
-            request_deserializer=handler.request_deserializer,
-            response_serializer=handler.response_serializer,
-        )
+        return handler._replace(unary_unary=call)
 
     def _wrap_unary_stream(self, handler: Handler, trace_id: str) -> Handler:
         async def call(request, context):  # noqa: ANN001 - gRPC signature
@@ -60,11 +54,7 @@ class TraceIdInterceptor(grpc.aio.ServerInterceptor):
             finally:
                 reset_trace_id(token)
 
-        return grpc.aio.unary_stream_rpc_method_handler(
-            call,
-            request_deserializer=handler.request_deserializer,
-            response_serializer=handler.response_serializer,
-        )
+        return handler._replace(unary_unary=call)
 
     def _wrap_stream_unary(self, handler: Handler, trace_id: str) -> Handler:
         async def call(request_iterator, context):  # noqa: ANN001 - gRPC signature
@@ -75,11 +65,7 @@ class TraceIdInterceptor(grpc.aio.ServerInterceptor):
             finally:
                 reset_trace_id(token)
 
-        return grpc.aio.stream_unary_rpc_method_handler(
-            call,
-            request_deserializer=handler.request_deserializer,
-            response_serializer=handler.response_serializer,
-        )
+        return handler._replace(stream_unary=call)
 
     def _wrap_stream_stream(self, handler: Handler, trace_id: str) -> Handler:
         async def call(request_iterator, context):  # noqa: ANN001 - gRPC signature
@@ -91,8 +77,4 @@ class TraceIdInterceptor(grpc.aio.ServerInterceptor):
             finally:
                 reset_trace_id(token)
 
-        return grpc.aio.stream_stream_rpc_method_handler(
-            call,
-            request_deserializer=handler.request_deserializer,
-            response_serializer=handler.response_serializer,
-        )
+        return handler._replace(stream_stream=call)

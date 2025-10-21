@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-"""Load POI data from JSON into PostgreSQL for POI Service."""
 from __future__ import annotations
 
 import asyncio
