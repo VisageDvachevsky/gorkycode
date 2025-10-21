@@ -24,33 +24,33 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0broute.proto\x12\x05route\"w\n\x18RouteOptimizationRequest\x12\x11\n\tstart_lat\x18\x01 \x01(\x01\x12\x11\n\tstart_lon\x18\x02 \x01(\x01\x12\x1c\n\x04pois\x18\x03 \x03(\x0b\x32\x0e.route.POIInfo\x12\x17\n\x0f\x61vailable_hours\x18\x04 \x01(\x01\"h\n\x07POIInfo\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x19\n\x11\x61vg_visit_minutes\x18\x05 \x01(\x05\x12\x0e\n\x06rating\x18\x06 \x01(\x01\"\xdb\x01\n\x19RouteOptimizationResponse\x12\'\n\x0foptimized_route\x18\x01 \x03(\x0b\x32\x0e.route.POIInfo\x12\x19\n\x11total_distance_km\x18\x02 \x01(\x01\x12\x15\n\rtotal_minutes\x18\x03 \x01(\x05\x12\x1d\n\x04legs\x18\x04 \x03(\x0b\x32\x0f.route.RouteLeg\x12!\n\x19total_walking_distance_km\x18\x05 \x01(\x01\x12!\n\x19total_transit_distance_km\x18\x06 \x01(\x01\"b\n\x14RouteGeometryRequest\x12\x11\n\tstart_lat\x18\x01 \x01(\x01\x12\x11\n\tstart_lon\x18\x02 \x01(\x01\x12$\n\twaypoints\x18\x03 \x03(\x0b\x32\x11.route.Coordinate\"&\n\nCoordinate\x12\x0b\n\x03lat\x18\x01 \x01(\x01\x12\x0b\n\x03lon\x18\x02 \x01(\x01\"a\n\x0bLegManeuver\x12\x13\n\x0binstruction\x18\x01 \x01(\t\x12\x13\n\x0bstreet_name\x18\x02 \x01(\t\x12\x12\n\ndistance_m\x18\x03 \x01(\x01\x12\x14\n\x0c\x64uration_sec\x18\x04 \x01(\x01\"N\n\x0bTransitStop\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04side\x18\x02 \x01(\t\x12#\n\x08position\x18\x03 \x01(\x0b\x32\x11.route.Coordinate\"\xd3\x02\n\x11TransitLegDetails\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x11\n\tline_name\x18\x02 \x01(\t\x12\x14\n\x0cvehicle_type\x18\x03 \x01(\t\x12\x11\n\tdirection\x18\x04 \x01(\t\x12\x16\n\x0evehicle_number\x18\x05 \x01(\t\x12\x0f\n\x07summary\x18\x06 \x01(\t\x12$\n\x08\x62oarding\x18\x07 \x01(\x0b\x32\x12.route.TransitStop\x12%\n\talighting\x18\x08 \x01(\x0b\x32\x12.route.TransitStop\x12\x16\n\x0e\x64\x65parture_time\x18\t \x01(\t\x12\x14\n\x0c\x61rrival_time\x18\n \x01(\t\x12\r\n\x05notes\x18\x0b \x01(\t\x12\x1c\n\x14walk_to_board_meters\x18\x0c \x01(\x01\x12\x1f\n\x17walk_from_alight_meters\x18\r \x01(\x01\"\xdb\x01\n\x08RouteLeg\x12 \n\x05start\x18\x01 \x01(\x0b\x32\x11.route.Coordinate\x12\x1e\n\x03\x65nd\x18\x02 \x01(\x0b\x32\x11.route.Coordinate\x12\x13\n\x0b\x64istance_km\x18\x03 \x01(\x01\x12\x18\n\x10\x64uration_minutes\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x01(\t\x12%\n\tmaneuvers\x18\x06 \x03(\x0b\x32\x12.route.LegManeuver\x12)\n\x07transit\x18\x07 \x01(\x0b\x32\x18.route.TransitLegDetails\"W\n\x15RouteGeometryResponse\x12#\n\x08geometry\x18\x01 \x03(\x0b\x32\x11.route.Coordinate\x12\x19\n\x11total_distance_km\x18\x02 \x01(\x01\x32\xbe\x01\n\x13RoutePlannerService\x12R\n\rOptimizeRoute\x12\x1f.route.RouteOptimizationRequest\x1a .route.RouteOptimizationResponse\x12S\n\x16\x43\x61lculateRouteGeometry\x12\x1b.route.RouteGeometryRequest\x1a\x1c.route.RouteGeometryResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0broute.proto\x12\x05route\"\x8a\x01\n\x18RouteOptimizationRequest\x12\x11\n\tstart_lat\x18\x01 \x01(\x01\x12\x11\n\tstart_lon\x18\x02 \x01(\x01\x12\x1c\n\x04pois\x18\x03 \x03(\x0b\x32\x0e.route.POIInfo\x12\x17\n\x0f\x61vailable_hours\x18\x04 \x01(\x01\x12\x11\n\tintensity\x18\x05 \x01(\t\"h\n\x07POIInfo\x12\n\n\x02id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x19\n\x11\x61vg_visit_minutes\x18\x05 \x01(\x05\x12\x0e\n\x06rating\x18\x06 \x01(\x01\"\xdb\x01\n\x19RouteOptimizationResponse\x12\'\n\x0foptimized_route\x18\x01 \x03(\x0b\x32\x0e.route.POIInfo\x12\x19\n\x11total_distance_km\x18\x02 \x01(\x01\x12\x15\n\rtotal_minutes\x18\x03 \x01(\x05\x12\x1d\n\x04legs\x18\x04 \x03(\x0b\x32\x0f.route.RouteLeg\x12!\n\x19total_walking_distance_km\x18\x05 \x01(\x01\x12!\n\x19total_transit_distance_km\x18\x06 \x01(\x01\"b\n\x14RouteGeometryRequest\x12\x11\n\tstart_lat\x18\x01 \x01(\x01\x12\x11\n\tstart_lon\x18\x02 \x01(\x01\x12$\n\twaypoints\x18\x03 \x03(\x0b\x32\x11.route.Coordinate\"&\n\nCoordinate\x12\x0b\n\x03lat\x18\x01 \x01(\x01\x12\x0b\n\x03lon\x18\x02 \x01(\x01\"a\n\x0bLegManeuver\x12\x13\n\x0binstruction\x18\x01 \x01(\t\x12\x13\n\x0bstreet_name\x18\x02 \x01(\t\x12\x12\n\ndistance_m\x18\x03 \x01(\x01\x12\x14\n\x0c\x64uration_sec\x18\x04 \x01(\x01\"N\n\x0bTransitStop\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04side\x18\x02 \x01(\t\x12#\n\x08position\x18\x03 \x01(\x0b\x32\x11.route.Coordinate\"\xd3\x02\n\x11TransitLegDetails\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x11\n\tline_name\x18\x02 \x01(\t\x12\x14\n\x0cvehicle_type\x18\x03 \x01(\t\x12\x11\n\tdirection\x18\x04 \x01(\t\x12\x16\n\x0evehicle_number\x18\x05 \x01(\t\x12\x0f\n\x07summary\x18\x06 \x01(\t\x12$\n\x08\x62oarding\x18\x07 \x01(\x0b\x32\x12.route.TransitStop\x12%\n\talighting\x18\x08 \x01(\x0b\x32\x12.route.TransitStop\x12\x16\n\x0e\x64\x65parture_time\x18\t \x01(\t\x12\x14\n\x0c\x61rrival_time\x18\n \x01(\t\x12\r\n\x05notes\x18\x0b \x01(\t\x12\x1c\n\x14walk_to_board_meters\x18\x0c \x01(\x01\x12\x1f\n\x17walk_from_alight_meters\x18\r \x01(\x01\"\xdb\x01\n\x08RouteLeg\x12 \n\x05start\x18\x01 \x01(\x0b\x32\x11.route.Coordinate\x12\x1e\n\x03\x65nd\x18\x02 \x01(\x0b\x32\x11.route.Coordinate\x12\x13\n\x0b\x64istance_km\x18\x03 \x01(\x01\x12\x18\n\x10\x64uration_minutes\x18\x04 \x01(\x01\x12\x0c\n\x04mode\x18\x05 \x01(\t\x12%\n\tmaneuvers\x18\x06 \x03(\x0b\x32\x12.route.LegManeuver\x12)\n\x07transit\x18\x07 \x01(\x0b\x32\x18.route.TransitLegDetails\"W\n\x15RouteGeometryResponse\x12#\n\x08geometry\x18\x01 \x03(\x0b\x32\x11.route.Coordinate\x12\x19\n\x11total_distance_km\x18\x02 \x01(\x01\x32\xbe\x01\n\x13RoutePlannerService\x12R\n\rOptimizeRoute\x12\x1f.route.RouteOptimizationRequest\x1a .route.RouteOptimizationResponse\x12S\n\x16\x43\x61lculateRouteGeometry\x12\x1b.route.RouteGeometryRequest\x1a\x1c.route.RouteGeometryResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'route_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_ROUTEOPTIMIZATIONREQUEST']._serialized_start=22
-  _globals['_ROUTEOPTIMIZATIONREQUEST']._serialized_end=141
-  _globals['_POIINFO']._serialized_start=143
-  _globals['_POIINFO']._serialized_end=247
-  _globals['_ROUTEOPTIMIZATIONRESPONSE']._serialized_start=250
-  _globals['_ROUTEOPTIMIZATIONRESPONSE']._serialized_end=469
-  _globals['_ROUTEGEOMETRYREQUEST']._serialized_start=471
-  _globals['_ROUTEGEOMETRYREQUEST']._serialized_end=569
-  _globals['_COORDINATE']._serialized_start=571
-  _globals['_COORDINATE']._serialized_end=609
-  _globals['_LEGMANEUVER']._serialized_start=611
-  _globals['_LEGMANEUVER']._serialized_end=708
-  _globals['_TRANSITSTOP']._serialized_start=710
-  _globals['_TRANSITSTOP']._serialized_end=788
-  _globals['_TRANSITLEGDETAILS']._serialized_start=791
-  _globals['_TRANSITLEGDETAILS']._serialized_end=1130
-  _globals['_ROUTELEG']._serialized_start=1133
-  _globals['_ROUTELEG']._serialized_end=1352
-  _globals['_ROUTEGEOMETRYRESPONSE']._serialized_start=1354
-  _globals['_ROUTEGEOMETRYRESPONSE']._serialized_end=1441
-  _globals['_ROUTEPLANNERSERVICE']._serialized_start=1444
-  _globals['_ROUTEPLANNERSERVICE']._serialized_end=1634
+  _globals['_ROUTEOPTIMIZATIONREQUEST']._serialized_start=23
+  _globals['_ROUTEOPTIMIZATIONREQUEST']._serialized_end=161
+  _globals['_POIINFO']._serialized_start=163
+  _globals['_POIINFO']._serialized_end=267
+  _globals['_ROUTEOPTIMIZATIONRESPONSE']._serialized_start=270
+  _globals['_ROUTEOPTIMIZATIONRESPONSE']._serialized_end=489
+  _globals['_ROUTEGEOMETRYREQUEST']._serialized_start=491
+  _globals['_ROUTEGEOMETRYREQUEST']._serialized_end=589
+  _globals['_COORDINATE']._serialized_start=591
+  _globals['_COORDINATE']._serialized_end=629
+  _globals['_LEGMANEUVER']._serialized_start=631
+  _globals['_LEGMANEUVER']._serialized_end=728
+  _globals['_TRANSITSTOP']._serialized_start=730
+  _globals['_TRANSITSTOP']._serialized_end=808
+  _globals['_TRANSITLEGDETAILS']._serialized_start=811
+  _globals['_TRANSITLEGDETAILS']._serialized_end=1150
+  _globals['_ROUTELEG']._serialized_start=1153
+  _globals['_ROUTELEG']._serialized_end=1372
+  _globals['_ROUTEGEOMETRYRESPONSE']._serialized_start=1374
+  _globals['_ROUTEGEOMETRYRESPONSE']._serialized_end=1461
+  _globals['_ROUTEPLANNERSERVICE']._serialized_start=1464
+  _globals['_ROUTEPLANNERSERVICE']._serialized_end=1654
 # @@protoc_insertion_point(module_scope)

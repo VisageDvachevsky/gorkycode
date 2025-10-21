@@ -28,6 +28,27 @@ router = APIRouter()
 WALK_SPEED_KMH = 4.5
 DEFAULT_VISIT_MINUTES = 45
 
+INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
+    "relaxed": {
+        "walk_speed_multiplier": 0.85,
+        "visit_duration_multiplier": 1.3,
+        "min_visit_minutes": 25,
+        "max_visit_minutes": 75,
+    },
+    "medium": {
+        "walk_speed_multiplier": 1.0,
+        "visit_duration_multiplier": 1.0,
+        "min_visit_minutes": 20,
+        "max_visit_minutes": 60,
+    },
+    "intense": {
+        "walk_speed_multiplier": 1.15,
+        "visit_duration_multiplier": 0.75,
+        "min_visit_minutes": 15,
+        "max_visit_minutes": 45,
+    },
+}
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate great-circle distance between two points."""
@@ -45,10 +66,25 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return radius * c
 
 
-def _minutes_from_distance(distance_km: float) -> float:
+def _get_intensity_profile(intensity: str) -> Dict[str, float]:
+    return INTENSITY_PROFILES.get(intensity, INTENSITY_PROFILES["medium"])
+
+
+def _minutes_from_distance(distance_km: float, intensity: str = "medium") -> float:
     if distance_km <= 0:
         return 0.0
-    return (distance_km / WALK_SPEED_KMH) * 60.0
+    profile = _get_intensity_profile(intensity)
+    walk_speed = max(0.5, WALK_SPEED_KMH * profile["walk_speed_multiplier"])
+    return (distance_km / walk_speed) * 60.0
+
+
+def _effective_visit_minutes(base_minutes: Optional[int], intensity: str) -> int:
+    minutes = base_minutes or DEFAULT_VISIT_MINUTES
+    profile = _get_intensity_profile(intensity)
+    adjusted = int(round(minutes * profile["visit_duration_multiplier"]))
+    min_minutes = int(profile["min_visit_minutes"])
+    max_minutes = int(profile["max_visit_minutes"])
+    return max(min_minutes, min(max_minutes, max(5, adjusted)))
 
 
 def _convert_transit_stop(stop_msg: route_pb2.TransitStop) -> Optional[TransitStopInfo]:
@@ -213,6 +249,7 @@ async def _maybe_add_coffee_break(
     current_lon: float,
     cursor_time: datetime,
     order_number: int,
+    intensity: str,
 ) -> Optional[Tuple[POIInRoute, datetime, float, float, float]]:
     radius = preferences.search_radius_km or 0.6
 
@@ -231,10 +268,11 @@ async def _maybe_add_coffee_break(
 
     cafe = min(cafes, key=lambda c: c.distance if c.distance else 0.0)
     walk_km = _haversine_km(current_lat, current_lon, cafe.lat, cafe.lon)
-    walk_minutes = _minutes_from_distance(walk_km)
+    walk_minutes = _minutes_from_distance(walk_km, intensity)
     arrival_time = cursor_time + timedelta(minutes=walk_minutes)
 
     stay_minutes = max(15, min(30, preferences.interval_minutes // 3))
+    stay_minutes = _effective_visit_minutes(stay_minutes, intensity)
     leave_time = arrival_time + timedelta(minutes=stay_minutes)
 
     why = (
@@ -327,6 +365,7 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             start_lon=start_lon,
             pois=candidates,
             available_hours=request.hours,
+            intensity=request.intensity,
         )
     except Exception as exc:
         logger.exception("Route planner error")
@@ -362,13 +401,16 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         if not ranked:
             continue
         details = full_details.get(poi_id)
+        base_visit = poi_info.avg_visit_minutes or DEFAULT_VISIT_MINUTES
+        effective_visit = _effective_visit_minutes(base_visit, request.intensity)
         ordered.append(
             {
                 "id": poi_id,
                 "name": poi_info.name,
                 "lat": poi_info.lat,
                 "lon": poi_info.lon,
-                "avg_visit_minutes": poi_info.avg_visit_minutes or DEFAULT_VISIT_MINUTES,
+                "avg_visit_minutes": base_visit,
+                "effective_visit_minutes": effective_visit,
                 "rating": ranked.rating or 0.0,
                 "category": ranked.category,
                 "description": ranked.description,
@@ -461,14 +503,16 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         if leg_distance is None:
             leg_distance = _haversine_km(current_lat, current_lon, item["lat"], item["lon"])
         if leg_duration is None:
-            leg_duration = _minutes_from_distance(leg_distance)
+            leg_duration = _minutes_from_distance(leg_distance, request.intensity)
 
         if leg_duration:
             cursor_time += timedelta(minutes=leg_duration)
         total_distance_km += leg_distance
 
         explanation = explanation_map.get(item["id"])
-        visit_minutes = item["avg_visit_minutes"] or DEFAULT_VISIT_MINUTES
+        visit_minutes = item.get("effective_visit_minutes") or _effective_visit_minutes(
+            item.get("avg_visit_minutes"), request.intensity
+        )
         leave_time = cursor_time + timedelta(minutes=visit_minutes)
 
         route_items.append(
@@ -512,6 +556,7 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
                 current_lon=current_lon,
                 cursor_time=cursor_time,
                 order_number=order_counter,
+                intensity=request.intensity,
             )
             if coffee_data:
                 coffee_item, new_cursor_time, coffee_lat, coffee_lon, walk_km_to_cafe = coffee_data
