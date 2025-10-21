@@ -1,7 +1,7 @@
 import hashlib
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from enum import Enum
 
 import httpx
@@ -312,51 +312,85 @@ class TwoGISClient:
         
         return None
     
-    async def get_distance_matrix(
+    async def request_distance_matrix(
         self,
-        sources: List[Tuple[float, float]],
-        targets: List[Tuple[float, float]],
-        transport: str = "pedestrian"
+        points: Sequence[Tuple[float, float]],
+        source_indices: Sequence[int],
+        target_indices: Sequence[int],
+        transport: str = "pedestrian",
     ) -> Optional[Dict[str, Any]]:
-        if not sources or not targets:
+        if not points or not source_indices or not target_indices:
             return None
-        
-        if len(sources) > 25 or len(targets) > 25:
-            logger.warning(f"Too many points: {len(sources)}×{len(targets)}, truncating")
-            sources = sources[:25]
-            targets = targets[:25]
-        
-        cache_key = self._cache_key("distmatrix", {
-            "sources": sources,
-            "targets": targets,
-            "transport": transport
-        })
-        
+
+        serialized_points = [{"lat": lat, "lon": lon} for lat, lon in points]
+
+        cache_key = self._cache_key(
+            "distmatrix",
+            {
+                "points": serialized_points,
+                "sources": list(source_indices),
+                "targets": list(target_indices),
+                "transport": transport,
+            },
+        )
+
         cached = await self._get_cached(cache_key)
         if cached:
             return cached
-        
-        formatted_points = [{"lat": lat, "lon": lon} for lat, lon in sources]
-        
+
         request_body = {
-            "points": formatted_points,
-            "sources": list(range(len(sources))),
-            "targets": list(range(len(targets))),
+            "points": serialized_points,
+            "sources": list(source_indices),
+            "targets": list(target_indices),
         }
-        
+
         data = await self._request_post(
             self.DISTANCE_MATRIX_URL,
             params={"version": "2.0"},
             json_body=request_body,
-            timeout=30
+            timeout=30,
         )
-        
-        if data and "routes" in data:
-            await self._set_cache(cache_key, data, ttl=3600)
-            logger.info(f"✓ Distance matrix: {len(sources)}×{len(targets)}")
-            return data
-        
-        return None
+
+        if not data or "routes" not in data:
+            return None
+
+        await self._set_cache(cache_key, data, ttl=3600)
+        logger.info(
+            "✓ Distance matrix chunk: %s×%s",
+            len(source_indices),
+            len(target_indices),
+        )
+        return data
+
+    async def get_distance_matrix(
+        self,
+        sources: Sequence[Tuple[float, float]],
+        targets: Sequence[Tuple[float, float]],
+        transport: str = "pedestrian",
+    ) -> Optional[Dict[str, Any]]:
+        if not sources or not targets:
+            return None
+
+        unique_points: List[Tuple[float, float]] = []
+        point_to_index: Dict[Tuple[float, float], int] = {}
+
+        def ensure_point(point: Tuple[float, float]) -> int:
+            idx = point_to_index.get(point)
+            if idx is None:
+                idx = len(unique_points)
+                unique_points.append(point)
+                point_to_index[point] = idx
+            return idx
+
+        source_indices = [ensure_point(pt) for pt in sources]
+        target_indices = [ensure_point(pt) for pt in targets]
+
+        return await self.request_distance_matrix(
+            unique_points,
+            source_indices,
+            target_indices,
+            transport=transport,
+        )
     
     def parse_distance_matrix(
         self,

@@ -129,27 +129,93 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
     ) -> Optional[np.ndarray]:
         all_points = [start_point] + [(poi.lat, poi.lon) for poi in pois]
 
-        if len(all_points) > 10:
-            logger.warning(
-                "Too many waypoints (%s) for distance matrix API – falling back",
-                len(all_points),
-            )
-            return None
+        max_points = 10
 
-        try:
-            data = await twogis_client.get_distance_matrix(
-                sources=all_points, targets=all_points, transport="pedestrian"
-            )
-            if not data:
+        if len(all_points) <= max_points:
+            try:
+                data = await twogis_client.get_distance_matrix(
+                    sources=all_points, targets=all_points, transport="pedestrian"
+                )
+                if not data:
+                    return None
+
+                matrix = twogis_client.parse_distance_matrix(
+                    data, num_sources=len(all_points), num_targets=len(all_points)
+                )
+                return np.array(matrix)
+            except Exception as exc:  # pragma: no cover - network
+                logger.warning(
+                    "Distance matrix unavailable, fallback to haversine: %s", exc
+                )
                 return None
 
-            matrix = twogis_client.parse_distance_matrix(
-                data, num_sources=len(all_points), num_targets=len(all_points)
-            )
-            return np.array(matrix)
-        except Exception as exc:  # pragma: no cover - network
-            logger.warning("Distance matrix unavailable, fallback to haversine: %s", exc)
-            return None
+        logger.info(
+            "Computing distance matrix in batches: %s points", len(all_points)
+        )
+
+        n = len(all_points)
+        matrix = np.full((n, n), float("inf"))
+        chunk_size = max(2, max_points // 2)
+
+        for src_start in range(0, n, chunk_size):
+            src_indices = list(range(src_start, min(n, src_start + chunk_size)))
+
+            for tgt_start in range(0, n, chunk_size):
+                tgt_indices = list(range(tgt_start, min(n, tgt_start + chunk_size)))
+
+                union: List[int] = []
+                local_index: Dict[int, int] = {}
+
+                for idx in src_indices + tgt_indices:
+                    if idx not in local_index:
+                        local_index[idx] = len(union)
+                        union.append(idx)
+
+                block_points = [all_points[idx] for idx in union]
+                block_sources = [local_index[idx] for idx in src_indices]
+                block_targets = [local_index[idx] for idx in tgt_indices]
+
+                try:
+                    data = await twogis_client.request_distance_matrix(
+                        block_points,
+                        block_sources,
+                        block_targets,
+                        transport="pedestrian",
+                    )
+                except Exception as exc:  # pragma: no cover - network
+                    logger.warning(
+                        "Distance matrix batch failed (%s→%s): %s",
+                        src_indices,
+                        tgt_indices,
+                        exc,
+                    )
+                    return None
+
+                if not data:
+                    logger.warning(
+                        "Distance matrix batch empty (%s→%s) – falling back",
+                        src_indices,
+                        tgt_indices,
+                    )
+                    return None
+
+                block_matrix = twogis_client.parse_distance_matrix(
+                    data,
+                    num_sources=len(block_sources),
+                    num_targets=len(block_targets),
+                )
+
+                for s_offset, s_idx in enumerate(src_indices):
+                    for t_offset, t_idx in enumerate(tgt_indices):
+                        value = block_matrix[s_offset][t_offset]
+                        if not np.isfinite(value):
+                            value = geodesic(all_points[s_idx], all_points[t_idx]).km
+                        matrix[s_idx][t_idx] = value
+
+        for i in range(n):
+            matrix[i][i] = 0.0
+
+        return matrix
 
     def _fallback_distance_matrix(
         self, start_point: CoordinateTuple, pois: Sequence[route_pb2.POIInfo]

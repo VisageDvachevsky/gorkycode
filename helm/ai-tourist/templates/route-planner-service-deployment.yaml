@@ -40,6 +40,17 @@ spec:
             configMapKeyRef:
               name: {{ include "ai-tourist.fullname" . }}-config
               key: WALK_SPEED_KMH
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: REDIS_URL
+        - name: TWOGIS_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ai-tourist.fullname" . }}-secrets
+              key: TWOGIS_API_KEY
+              optional: true
         - name: ENVIRONMENT
           valueFrom:
             configMapKeyRef:

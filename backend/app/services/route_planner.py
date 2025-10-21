@@ -135,32 +135,95 @@ class RoutePlanner:
     ) -> Optional[np.ndarray]:
         all_points = [(start_lat, start_lon)] + [(poi.lat, poi.lon) for poi in pois]
         
-        # 2GIS free tier limit: 10x10 matrix maximum
-        if len(all_points) > 10:
-            logger.warning(f"Too many POIs ({len(pois)}) for Distance Matrix API (max 10 with free tier), using haversine fallback")
-            return None
-        
-        try:
-            matrix_data = await twogis_client.get_distance_matrix(
-                sources=all_points,
-                targets=all_points,
-                transport="pedestrian"
-            )
-            
-            if not matrix_data:
+        max_points = 10
+
+        if len(all_points) <= max_points:
+            try:
+                matrix_data = await twogis_client.get_distance_matrix(
+                    sources=all_points,
+                    targets=all_points,
+                    transport="pedestrian"
+                )
+
+                if not matrix_data:
+                    return None
+
+                matrix = twogis_client.parse_distance_matrix(
+                    matrix_data,
+                    num_sources=len(all_points),
+                    num_targets=len(all_points)
+                )
+
+                return np.array(matrix)
+
+            except Exception as e:
+                logger.error(f"Distance Matrix API error: {e}")
                 return None
-            
-            matrix = twogis_client.parse_distance_matrix(
-                matrix_data,
-                num_sources=len(all_points),
-                num_targets=len(all_points)
-            )
-            
-            return np.array(matrix)
-            
-        except Exception as e:
-            logger.error(f"Distance Matrix API error: {e}")
-            return None
+
+        logger.info(f"Computing distance matrix in batches: {len(all_points)} points")
+
+        n = len(all_points)
+        matrix = np.full((n, n), float("inf"))
+        chunk_size = max(2, max_points // 2)
+
+        for src_start in range(0, n, chunk_size):
+            src_indices = list(range(src_start, min(n, src_start + chunk_size)))
+
+            for tgt_start in range(0, n, chunk_size):
+                tgt_indices = list(range(tgt_start, min(n, tgt_start + chunk_size)))
+
+                union: List[int] = []
+                local_index: Dict[int, int] = {}
+
+                for idx in src_indices + tgt_indices:
+                    if idx not in local_index:
+                        local_index[idx] = len(union)
+                        union.append(idx)
+
+                block_points = [all_points[idx] for idx in union]
+                block_sources = [local_index[idx] for idx in src_indices]
+                block_targets = [local_index[idx] for idx in tgt_indices]
+
+                try:
+                    data = await twogis_client.request_distance_matrix(
+                        block_points,
+                        block_sources,
+                        block_targets,
+                        transport="pedestrian",
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Distance matrix batch failed ({src_indices}->{tgt_indices}): {e}"
+                    )
+                    return None
+
+                if not data:
+                    logger.warning(
+                        f"Distance matrix batch empty ({src_indices}->{tgt_indices}), falling back"
+                    )
+                    return None
+
+                block_matrix = twogis_client.parse_distance_matrix(
+                    data,
+                    num_sources=len(block_sources),
+                    num_targets=len(block_targets)
+                )
+
+                for s_offset, s_idx in enumerate(src_indices):
+                    for t_offset, t_idx in enumerate(tgt_indices):
+                        value = block_matrix[s_offset][t_offset]
+                        if not np.isfinite(value):
+                            start = all_points[s_idx]
+                            end = all_points[t_idx]
+                            value = twogis_client.calculate_distance(
+                                start[0], start[1], end[0], end[1]
+                            )
+                        matrix[s_idx][t_idx] = value
+
+        for i in range(n):
+            matrix[i][i] = 0.0
+
+        return matrix
     
     def _greedy_nearest_neighbor(
         self,

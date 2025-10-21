@@ -1,43 +1,59 @@
 #!/usr/bin/env python3
 """Load POI data from JSON into PostgreSQL for POI Service."""
+from __future__ import annotations
+
 import asyncio
 import os
 import sys
 from pathlib import Path
+from typing import Sequence
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-
-def _add_sys_path(path: Path) -> None:
-    """Prepend *path* to ``sys.path`` if it exists and is not already present."""
-
-    if path.is_dir():
-        resolved = str(path)
-        if resolved not in sys.path:
-            sys.path.insert(0, resolved)
-
-
+# Ensure shared scripts are importable before loading helper utilities.
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
+SERVICE_ROOT = SCRIPT_DIR.parent
+try:
+    REPO_ROOT_HINT = SERVICE_ROOT.parents[1]
+except IndexError:
+    REPO_ROOT_HINT = SERVICE_ROOT
 
-# Ensure both the local service scripts directory and the repository-level
-# ``scripts`` directory are importable regardless of build context.
-_add_sys_path(SCRIPT_DIR)
-for ancestor in SCRIPT_PATH.parents:
-    _add_sys_path(ancestor / "scripts")
+_CANDIDATE_SCRIPT_DIRS = [
+    SCRIPT_DIR,
+    *(ancestor / "scripts" for ancestor in SCRIPT_PATH.parents),
+]
+for _candidate in _CANDIDATE_SCRIPT_DIRS:
+    if _candidate.is_dir():
+        _candidate_str = str(_candidate)
+        if _candidate_str not in sys.path:
+            sys.path.insert(0, _candidate_str)
 
-# gRPC stubs are generated into ``app/proto`` inside the service image; during
-# local execution the same directory exists under the repository service root.
-for ancestor in SCRIPT_PATH.parents:
-    _add_sys_path(ancestor / "app" / "proto")
+from poi_loader_utils import (
+    PoiDataError,
+    ensure_project_root,
+    ensure_pythonpath,
+    load_poi_data,
+    resolve_poi_json_path,
+)
 
-from poi_loader_utils import PoiDataError, load_poi_data, resolve_poi_json_path
+from sqlalchemy import Column, Float, Integer, String, Text, Time, select
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
+
+PROJECT_ROOT = ensure_project_root(REPO_ROOT_HINT, SERVICE_ROOT)
+ensure_pythonpath(
+    PROJECT_ROOT,
+    PROJECT_ROOT / "scripts",
+    SCRIPT_DIR,
+    SERVICE_ROOT,
+    SERVICE_ROOT / "app",
+    PROJECT_ROOT / "app",
+)
 
 import grpc
 
-from embedding_pb2 import BatchEmbeddingRequest
-from embedding_pb2_grpc import EmbeddingServiceStub
+from app.proto.embedding_pb2 import BatchEmbeddingRequest
+from app.proto.embedding_pb2_grpc import EmbeddingServiceStub
 
 
 DATABASE_URL = os.getenv(
@@ -49,13 +65,6 @@ EMBEDDING_SERVICE_ADDR = os.getenv("EMBEDDING_SERVICE_ADDR", "localhost:50051")
 EMBEDDING_BATCH_SIZE = max(1, int(os.getenv("EMBEDDING_BATCH_SIZE", "16")))
 EMBEDDING_TIMEOUT = float(os.getenv("EMBEDDING_TIMEOUT_SECONDS", "30"))
 EMBEDDING_USE_CACHE = os.getenv("EMBEDDING_USE_CACHE", "1").lower() not in {"0", "false", "no"}
-
-
-from typing import Sequence
-
-from sqlalchemy import Column, Integer, String, Float, Text, Time
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
