@@ -1,4 +1,3 @@
-"""Utility helpers for locating and loading POI datasets."""
 from __future__ import annotations
 
 import json
@@ -10,7 +9,6 @@ __all__ = ["PoiDataError", "resolve_poi_json_path", "load_poi_data"]
 
 
 class PoiDataError(RuntimeError):
-    """Raised when POI data cannot be found or parsed."""
 
     def __init__(self, message: str, *, path: Path | None = None, checked: Sequence[Path] | None = None):
         super().__init__(message)
