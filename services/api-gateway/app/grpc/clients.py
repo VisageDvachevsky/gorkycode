@@ -176,7 +176,8 @@ class RoutePlannerClient:
         start_lat: float,
         start_lon: float,
         pois: List[route_pb2.POIInfo],
-        available_hours: float
+        available_hours: float,
+        intensity: str,
     ):
         if not self.stub:
             raise RuntimeError("Route planner gRPC stub is not initialised")
@@ -185,7 +186,8 @@ class RoutePlannerClient:
             start_lat=start_lat,
             start_lon=start_lon,
             pois=pois,
-            available_hours=available_hours
+            available_hours=available_hours,
+            intensity=intensity,
         )
         response = await self.stub.OptimizeRoute(request)
         return response

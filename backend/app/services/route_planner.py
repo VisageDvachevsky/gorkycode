@@ -14,11 +14,51 @@ logger = logging.getLogger(__name__)
 
 
 class RoutePlanner:
+    CLUSTER_DISTANCE_BY_INTENSITY: Dict[str, float] = {
+        "relaxed": 0.4,
+        "medium": 0.3,
+        "intense": 0.22,
+    }
+
+    INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
+        "relaxed": {
+            "walk_speed_multiplier": 0.85,
+            "visit_duration_multiplier": 1.3,
+            "min_visit_minutes": 25,
+            "max_visit_minutes": 75,
+        },
+        "medium": {
+            "walk_speed_multiplier": 1.0,
+            "visit_duration_multiplier": 1.0,
+            "min_visit_minutes": 20,
+            "max_visit_minutes": 60,
+        },
+        "intense": {
+            "walk_speed_multiplier": 1.15,
+            "visit_duration_multiplier": 0.75,
+            "min_visit_minutes": 15,
+            "max_visit_minutes": 45,
+        },
+    }
+
     def __init__(self):
         self.walk_speed_kmh = settings.DEFAULT_WALK_SPEED_KMH
-    
-    def calculate_walk_time_minutes(self, distance_km: float) -> int:
-        return int((distance_km / self.walk_speed_kmh) * 60) + 5
+
+    def _get_intensity_profile(self, intensity: str) -> Dict[str, float]:
+        return self.INTENSITY_PROFILES.get(intensity, self.INTENSITY_PROFILES["medium"])
+
+    def calculate_walk_time_minutes(self, distance_km: float, intensity: str = "medium") -> int:
+        profile = self._get_intensity_profile(intensity)
+        walk_speed_kmh = max(0.5, self.walk_speed_kmh * profile["walk_speed_multiplier"])
+        return int(round((distance_km / walk_speed_kmh) * 60)) + 5
+
+    def get_effective_visit_minutes(self, poi: POI, intensity: str = "medium") -> int:
+        base_minutes = poi.avg_visit_minutes or 30
+        profile = self._get_intensity_profile(intensity)
+        adjusted = int(round(base_minutes * profile["visit_duration_multiplier"]))
+        min_minutes = int(profile["min_visit_minutes"])
+        max_minutes = int(profile["max_visit_minutes"])
+        return max(min_minutes, min(max_minutes, max(5, adjusted)))
     
     async def optimize_route(
         self,
@@ -26,12 +66,22 @@ class RoutePlanner:
         start_lon: float,
         pois: List[POI],
         available_hours: float,
+        intensity: str = "medium",
     ) -> Tuple[List[POI], float]:
         if not pois:
             return [], 0.0
-        
+
         available_minutes = available_hours * 60
-        
+
+        filtered_pois = self._filter_dense_clusters(pois, intensity)
+        if len(filtered_pois) < len(pois):
+            logger.info(
+                "Filtered dense cluster of POIs: %s → %s",
+                len(pois),
+                len(filtered_pois),
+            )
+        pois = filtered_pois
+
         # Smart reordering: prefer starting from furthest point
         pois = self._reorder_pois_by_sectors(start_lat, start_lon, pois)
         
@@ -42,18 +92,18 @@ class RoutePlanner:
         if distance_matrix is None:
             logger.warning("Distance Matrix API failed, using haversine fallback")
             return await self._optimize_route_haversine(
-                start_lat, start_lon, pois, available_hours
+                start_lat, start_lon, pois, available_hours, intensity
             )
-        
+
         route_indices, total_time, total_distance = self._greedy_nearest_neighbor(
-            distance_matrix, pois, available_minutes
+            distance_matrix, pois, available_minutes, intensity
         )
         
         if not route_indices:
             return [], 0.0
         
         route_indices = self._two_opt_improve(
-            route_indices, distance_matrix, pois, available_minutes
+            route_indices, distance_matrix, pois, available_minutes, intensity
         )
         
         ordered_route = [pois[i] for i in route_indices]
@@ -67,6 +117,73 @@ class RoutePlanner:
         logger.info(f"✓ Optimized route: {len(ordered_route)} POIs, {final_distance:.2f}km (real roads)")
         
         return ordered_route, final_distance
+
+    def _filter_dense_clusters(self, pois: List[POI], intensity: str) -> List[POI]:
+        if len(pois) <= 1:
+            return pois
+
+        base_threshold = self.CLUSTER_DISTANCE_BY_INTENSITY.get(
+            intensity,
+            self.CLUSTER_DISTANCE_BY_INTENSITY["medium"],
+        )
+        thresholds = [
+            base_threshold,
+            max(base_threshold * 0.75, 0.2),
+            max(base_threshold * 0.5, 0.14),
+            0.1,
+        ]
+
+        # Ensure thresholds are strictly decreasing and positive
+        deduped_thresholds: List[float] = []
+        for value in thresholds:
+            value = round(value, 6)
+            if value <= 0:
+                continue
+            if not deduped_thresholds or value < deduped_thresholds[-1]:
+                deduped_thresholds.append(value)
+
+        thresholds = deduped_thresholds
+
+        selected: List[POI] = []
+        selected_ids = set()
+
+        for threshold in thresholds:
+            for poi in pois:
+                if poi.id in selected_ids:
+                    continue
+
+                if self._is_far_enough(poi, selected, threshold):
+                    selected.append(poi)
+                    selected_ids.add(poi.id)
+
+                    if len(selected) >= len(pois):
+                        break
+
+            if len(selected) >= len(pois):
+                break
+
+        return selected if selected else pois
+
+    def _is_far_enough(
+        self,
+        poi: POI,
+        selected: List[POI],
+        min_distance_km: float,
+    ) -> bool:
+        if min_distance_km <= 0.0 or not selected:
+            return True
+
+        for existing in selected:
+            distance = twogis_client.calculate_distance(
+                poi.lat,
+                poi.lon,
+                existing.lat,
+                existing.lon,
+            )
+            if distance < min_distance_km:
+                return False
+
+        return True
     
     def _reorder_pois_by_sectors(
         self,
@@ -229,7 +346,8 @@ class RoutePlanner:
         self,
         distance_matrix: np.ndarray,
         pois: List[POI],
-        available_minutes: int
+        available_minutes: int,
+        intensity: str,
     ) -> Tuple[List[int], int, float]:
         n = len(pois)
         remaining = set(range(n))
@@ -277,8 +395,8 @@ class RoutePlanner:
                 break
             
             nearest_dist = distance_matrix[current_idx + 1][best_idx + 1]
-            walk_time = self.calculate_walk_time_minutes(nearest_dist)
-            poi_time = pois[best_idx].avg_visit_minutes
+            walk_time = self.calculate_walk_time_minutes(nearest_dist, intensity)
+            poi_time = self.get_effective_visit_minutes(pois[best_idx], intensity)
             
             if total_time + walk_time + poi_time > available_minutes:
                 break
@@ -306,6 +424,7 @@ class RoutePlanner:
         distance_matrix: np.ndarray,
         pois: List[POI],
         available_minutes: int,
+        intensity: str,
         max_iterations: int = 10
     ) -> List[int]:
         if len(route) < 4:
@@ -330,7 +449,9 @@ class RoutePlanner:
                     )
                     
                     if new_dist < current_dist:
-                        new_time = self._calculate_total_time(new_route, distance_matrix, pois)
+                        new_time = self._calculate_total_time(
+                            new_route, distance_matrix, pois, intensity
+                        )
                         if new_time <= available_minutes:
                             route = new_route
                             improved = True
@@ -364,26 +485,28 @@ class RoutePlanner:
         self,
         route: List[int],
         distance_matrix: np.ndarray,
-        pois: List[POI]
+        pois: List[POI],
+        intensity: str,
     ) -> int:
         total_time = 0
         prev_idx = -1
-        
+
         for poi_idx in route:
             dist = distance_matrix[prev_idx + 1][poi_idx + 1]
-            walk_time = self.calculate_walk_time_minutes(dist)
-            poi_time = pois[poi_idx].avg_visit_minutes
+            walk_time = self.calculate_walk_time_minutes(dist, intensity)
+            poi_time = self.get_effective_visit_minutes(pois[poi_idx], intensity)
             total_time += walk_time + poi_time
             prev_idx = poi_idx
-        
+
         return total_time
-    
+
     async def _optimize_route_haversine(
         self,
         start_lat: float,
         start_lon: float,
         pois: List[POI],
-        available_hours: float
+        available_hours: float,
+        intensity: str,
     ) -> Tuple[List[POI], float]:
         available_minutes = available_hours * 60
         
@@ -409,8 +532,8 @@ class RoutePlanner:
             if nearest_poi is None:
                 break
             
-            walk_time = self.calculate_walk_time_minutes(nearest_dist)
-            poi_time = nearest_poi.avg_visit_minutes
+            walk_time = self.calculate_walk_time_minutes(nearest_dist, intensity)
+            poi_time = self.get_effective_visit_minutes(nearest_poi, intensity)
             
             if total_time + walk_time + poi_time > available_minutes:
                 break
@@ -430,7 +553,8 @@ class RoutePlanner:
         preferences: Dict[str, Any],
         coffee_service: "CoffeeService",
         session: Any = None,
-        start_time: Optional[datetime] = None
+        start_time: Optional[datetime] = None,
+        intensity: str = "medium",
     ) -> List[POI]:
         if not route or len(route) < 2:
             return route
@@ -446,8 +570,9 @@ class RoutePlanner:
             result.append(poi)
             
             # Update current time
-            current_time += timedelta(minutes=poi.avg_visit_minutes)
-            time_since_last_break += poi.avg_visit_minutes
+            visit_minutes = self.get_effective_visit_minutes(poi, intensity)
+            current_time += timedelta(minutes=visit_minutes)
+            time_since_last_break += visit_minutes
             
             should_add_coffee = (
                 time_since_last_break >= interval_minutes or
@@ -482,7 +607,8 @@ class RoutePlanner:
                         result.append(cafe_poi)
                         time_since_last_break = 0
                         coffee_added = True
-                        current_time += timedelta(minutes=cafe_poi.avg_visit_minutes)
+                        cafe_visit = self.get_effective_visit_minutes(cafe_poi, intensity)
+                        current_time += timedelta(minutes=cafe_visit)
                         logger.info(f"✓ Added coffee break: {cafe_poi.name} (open at {current_time.strftime('%H:%M')})")
         
         if not coffee_added and len(route) >= 2:
@@ -500,7 +626,7 @@ class RoutePlanner:
                     # Calculate time at middle
                     mid_time = start_time if start_time else datetime.now()
                     for poi in route[:mid_idx+1]:
-                        mid_time += timedelta(minutes=poi.avg_visit_minutes)
+                        mid_time += timedelta(minutes=self.get_effective_visit_minutes(poi, intensity))
                     
                     from app.services.time_scheduler import time_scheduler
                     is_open = time_scheduler.validate_cafe_timing(cafe_data, mid_time)
