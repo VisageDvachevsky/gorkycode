@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 async def serve():
-    """Start gRPC server"""
     logger.info("🚀 Starting Route Planner Service...")
 
     start_http_server(9090)
@@ -41,7 +40,7 @@ async def serve():
 
     server.add_insecure_port(f'[::]:{settings.GRPC_PORT}')
 
-    logger.info(f"✅ Route Planner Service listening on port {settings.GRPC_PORT}")
+    logger.info("✅ Route Planner Service listening on port %s", settings.GRPC_PORT)
 
     await server.start()
     await server.wait_for_termination()

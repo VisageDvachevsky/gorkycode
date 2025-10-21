@@ -1,5 +1,3 @@
-"""gRPC servicer for advanced route planning."""
-
 from __future__ import annotations
 
 import logging
@@ -52,7 +50,6 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         self.walk_speed_kmh = settings.WALK_SPEED_KMH
 
     async def initialize(self) -> None:
-        """Initialise caches and external clients."""
 
         await twogis_client.connect_redis()
         await transit_advisor.connect_redis()
@@ -130,7 +127,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 total_transit_distance_km=totals["transit_distance"],
             )
 
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             logger.exception("Route optimization failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Route optimization failed: {exc}")
@@ -170,15 +167,11 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 total_distance_km=total_distance,
             )
 
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:
             logger.exception("Geometry calculation failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Geometry calculation failed: {exc}")
             return route_pb2.RouteGeometryResponse()
-
-    # ------------------------------------------------------------------
-    # Matrix helpers
-    # ------------------------------------------------------------------
 
     def _filter_dense_pois(
         self,
@@ -267,7 +260,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                     data, num_sources=len(all_points), num_targets=len(all_points)
                 )
                 return np.array(matrix)
-            except Exception as exc:  # pragma: no cover - network
+            except Exception as exc:
                 logger.warning(
                     "Distance matrix unavailable, fallback to haversine: %s", exc
                 )
@@ -306,7 +299,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                         block_targets,
                         transport="pedestrian",
                     )
-                except Exception as exc:  # pragma: no cover - network
+                except Exception as exc:
                     logger.warning(
                         "Distance matrix batch failed (%s→%s): %s",
                         src_indices,
@@ -354,10 +347,6 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                     continue
                 matrix[i][j] = geodesic(points[i], points[j]).km
         return matrix
-
-    # ------------------------------------------------------------------
-    # Route construction
-    # ------------------------------------------------------------------
 
     def _nearest_neighbor_route(
         self,
@@ -593,10 +582,6 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
         leg.transit.CopyFrom(details)
         return leg
-
-    # ------------------------------------------------------------------
-    # Geometry helpers
-    # ------------------------------------------------------------------
 
     async def _build_geometry(
         self, points: Sequence[CoordinateTuple]

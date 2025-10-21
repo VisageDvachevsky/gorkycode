@@ -39,7 +39,6 @@ export default function StepInterests({ formData, updateFormData, categories, ca
         </p>
       </div>
 
-      {/* Free-form interests */}
       <div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
           <Sparkles className="w-4 h-4 text-blue-600" />
@@ -64,14 +63,12 @@ export default function StepInterests({ formData, updateFormData, categories, ca
         )}
       </div>
 
-      {/* Divider */}
       <div className="flex items-center gap-4">
         <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-700 to-transparent" />
         <span className="text-sm font-medium text-slate-500 dark:text-slate-400">или</span>
         <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-slate-700 to-transparent" />
       </div>
 
-      {/* Categories */}
       <div>
         <label className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-4">
           <Tag className="w-4 h-4 text-indigo-600" />
@@ -141,7 +138,6 @@ export default function StepInterests({ formData, updateFormData, categories, ca
         )}
       </div>
 
-      {/* Helper text */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-4">
         <p className="text-sm text-blue-800 dark:text-blue-200">
           <span className="font-bold">💡 Совет:</span> Чем подробнее вы опишете интересы или выберете категории, тем точнее AI подберёт места

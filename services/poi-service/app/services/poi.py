@@ -10,6 +10,8 @@ from app.proto import poi_pb2, poi_pb2_grpc
 from app.core.config import settings
 from app.models.poi import POI as POIModel
 
+EARTH_RADIUS_KM = 6371
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,8 +22,7 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         self.twogis_api_key = settings.TWOGIS_API_KEY
     
     async def initialize(self):
-        """Initialize database connection"""
-        logger.info(f"Connecting to database...")
+        logger.info("Connecting to database...")
         
         self.engine = create_async_engine(
             settings.DATABASE_URL,
@@ -42,7 +43,6 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         request: poi_pb2.GetPOIsRequest,
         context
     ) -> poi_pb2.GetPOIsResponse:
-        """Get all POIs from database"""
         try:
             async with self.session_maker() as session:
                 stmt = select(POIModel)
@@ -74,13 +74,13 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                     for poi in pois
                 ]
                 
-                logger.info(f"✓ Retrieved {len(response_pois)} POIs")
+                logger.info("✓ Retrieved %s POIs", len(response_pois))
                 return poi_pb2.GetPOIsResponse(pois=response_pois)
                 
-        except Exception as e:
-            logger.error(f"Error fetching POIs: {e}")
+        except Exception as exc:
+            logger.error("Error fetching POIs: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Database error: {str(e)}")
+            context.set_details(f"Database error: {exc}")
             return poi_pb2.GetPOIsResponse()
     
     async def GetCategories(
@@ -88,7 +88,6 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         request: poi_pb2.GetCategoriesRequest,
         context
     ) -> poi_pb2.GetCategoriesResponse:
-        """Get all categories with POI counts"""
         try:
             async with self.session_maker() as session:
                 stmt = select(
@@ -108,13 +107,13 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                     for row in rows
                 ]
                 
-                logger.info(f"✓ Retrieved {len(categories)} categories")
+                logger.info("✓ Retrieved %s categories", len(categories))
                 return poi_pb2.GetCategoriesResponse(categories=categories)
                 
-        except Exception as e:
-            logger.error(f"Error fetching categories: {e}")
+        except Exception as exc:
+            logger.error("Error fetching categories: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Database error: {str(e)}")
+            context.set_details(f"Database error: {exc}")
             return poi_pb2.GetCategoriesResponse()
     
     async def FindCafesNearLocation(
@@ -122,9 +121,7 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         request: poi_pb2.CafeSearchRequest,
         context
     ) -> poi_pb2.CafeSearchResponse:
-        """Find cafes near location using 2GIS API"""
         try:
-            # First try 2GIS API
             if self.twogis_api_key:
                 cafes = await self._search_2gis_cafes(
                     lat=request.lat,
@@ -135,7 +132,6 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                 if cafes:
                     return poi_pb2.CafeSearchResponse(cafes=cafes)
             
-            # Fallback to database
             async with self.session_maker() as session:
                 stmt = select(POIModel).where(POIModel.category == "cafe")
                 result = await session.execute(stmt)
@@ -162,14 +158,14 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                         )
                 
                 nearby_cafes.sort(key=lambda x: x.distance)
-                logger.info(f"✓ Found {len(nearby_cafes)} cafes from database")
+                logger.info("✓ Found %s cafes from database", len(nearby_cafes))
                 
                 return poi_pb2.CafeSearchResponse(cafes=nearby_cafes[:10])
                 
-        except Exception as e:
-            logger.error(f"Error finding cafes: {e}")
+        except Exception as exc:
+            logger.error("Error finding cafes: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Cafe search error: {str(e)}")
+            context.set_details(f"Cafe search error: {exc}")
             return poi_pb2.CafeSearchResponse()
     
     async def _search_2gis_cafes(
@@ -178,7 +174,6 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         lon: float,
         radius_km: float
     ) -> List[poi_pb2.Cafe]:
-        """Search cafes using 2GIS Places API"""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
@@ -218,16 +213,15 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                             )
                         )
                     
-                    logger.info(f"✓ Found {len(cafes)} cafes from 2GIS")
+                    logger.info("✓ Found %s cafes from 2GIS", len(cafes))
                     return sorted(cafes, key=lambda x: x.distance)[:10]
                 
-        except Exception as e:
-            logger.warning(f"2GIS API error: {e}")
+        except Exception as exc:
+            logger.warning("2GIS API error: %s", exc)
         
         return []
     
     def _calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-        """Calculate distance in km using Haversine formula"""
         from math import radians, cos, sin, asin, sqrt
         
         lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
@@ -237,4 +231,4 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
         a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
         c = 2 * asin(sqrt(a))
         
-        return c * 6371  # Earth radius in km
+        return c * EARTH_RADIUS_KM

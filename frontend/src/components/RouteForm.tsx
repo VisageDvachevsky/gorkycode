@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
 import { api } from '../api/client'
 import type { RouteRequest, RouteResponse, Category, CoffeePreferences } from '../types'
 import {
@@ -11,13 +10,7 @@ import {
   sanitizeRouteHours,
 } from '../constants/route'
 import 'leaflet/dist/leaflet.css'
-
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-})
+import '../lib/leaflet'
 
 interface Props {
   onRouteGenerated: (route: RouteResponse) => void
@@ -165,7 +158,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Interests */}
         <div className="animate-slideInLeft">
           <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <span className="text-xl">✍️</span>
@@ -187,7 +179,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </div>
 
-        {/* Categories */}
         <div className="animate-slideInLeft" style={{ animationDelay: '100ms' }}>
           <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <span className="text-xl">🏷️</span>
@@ -219,7 +210,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </div>
 
-        {/* Duration and Social mode */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-slideInLeft" style={{ animationDelay: '200ms' }}>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
@@ -258,7 +248,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           </div>
         </div>
 
-        {/* Intensity */}
         <div className="animate-slideInLeft" style={{ animationDelay: '300ms' }}>
           <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <span className="text-xl">⚡</span>
@@ -287,7 +276,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           </div>
         </div>
 
-        {/* Location */}
         <div className="animate-slideInLeft" style={{ animationDelay: '400ms' }}>
           <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
             <span className="text-xl">📍</span>
@@ -389,7 +377,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </div>
 
-        {/* Smart Coffee Breaks */}
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-6 animate-slideInLeft" style={{ animationDelay: '500ms' }}>
           <label className="flex items-center space-x-3 cursor-pointer">
             <input
@@ -494,7 +481,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </div>
 
-        {/* Public Transit */}
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-6 animate-slideInLeft" style={{ animationDelay: '550ms' }}>
           <label className="flex items-center space-x-3 cursor-pointer">
             <input
@@ -513,7 +499,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           </label>
         </div>
 
-        {/* Validation error */}
         {validationError && (
           <div className="bg-red-50 border-2 border-red-200 text-red-700 px-5 py-4 rounded-2xl animate-scaleIn">
             <p className="font-bold flex items-center gap-2">
@@ -523,7 +508,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           </div>
         )}
 
-        {/* Submit button */}
         <button
           type="submit"
           disabled={mutation.isPending || formProgress < 100}
@@ -545,7 +529,6 @@ export default function RouteForm({ onRouteGenerated }: Props) {
           )}
         </button>
 
-        {/* Error */}
         {mutation.isError && (
           <div className="bg-red-50 border-2 border-red-200 text-red-700 px-5 py-4 rounded-2xl animate-scaleIn">
             <p className="font-bold">Ошибка при создании маршрута</p>

@@ -10,8 +10,6 @@ DEFAULT_TIMEZONE = "Europe/Moscow"
 
 
 class CoffeePreferences(BaseModel):
-    """Preferences for optional coffee break injection."""
-
     enabled: bool = True
     interval_minutes: int = Field(90, ge=15, le=240)
     search_radius_km: float = Field(0.6, gt=0.1, le=5.0)
@@ -22,8 +20,6 @@ class CoffeePreferences(BaseModel):
 
 
 class RouteRequest(BaseModel):
-    """Incoming payload from the frontend wizard."""
-
     interests: Optional[str] = Field(default=None, max_length=500)
     categories: Optional[List[str]] = None
     hours: float = Field(..., ge=0.5, le=8.0)
@@ -34,7 +30,7 @@ class RouteRequest(BaseModel):
     coffee_preferences: Optional[CoffeePreferences] = None
     intensity: Literal["relaxed", "medium", "intense", "low", "high"] = "medium"
     allow_transit: Optional[bool] = True
-    start_time: Optional[str] = None  # HH:MM format
+    start_time: Optional[str] = None
     client_timezone: Optional[str] = DEFAULT_TIMEZONE
 
     @field_validator("categories", mode="before")
@@ -65,7 +61,6 @@ class RouteRequest(BaseModel):
         return self
 
     def resolved_timezone(self) -> ZoneInfo:
-        """Return a valid ZoneInfo instance, falling back to Moscow."""
         tz_name = self.client_timezone or DEFAULT_TIMEZONE
         try:
             return ZoneInfo(tz_name)

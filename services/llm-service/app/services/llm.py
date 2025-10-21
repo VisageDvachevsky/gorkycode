@@ -1,8 +1,9 @@
-import logging
 import json
+import logging
 import re
-from typing import Dict, Any, List
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from typing import Any, Dict, List
+
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
@@ -19,8 +20,7 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         self.anthropic_client = None
 
     async def initialize(self):
-        """Initialize LLM clients"""
-        logger.info(f"Initializing LLM Service with provider: {settings.LLM_PROVIDER}")
+        logger.info("Initializing LLM Service with provider: %s", settings.LLM_PROVIDER)
 
         if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY:
             self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -41,7 +41,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         request: llm_pb2.RouteExplanationRequest,
         context
     ) -> llm_pb2.RouteExplanationResponse:
-        """Generate explanations using LLM"""
         try:
             system_prompt = self._load_system_prompt()
             user_prompt = self._build_detailed_prompt(request)
@@ -56,7 +55,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
 
             parsed = self._extract_json(response_text)
 
-            # Validate response
             if not isinstance(parsed, dict):
                 raise ValueError("LLM response is not a dict")
 
@@ -70,10 +68,9 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
 
             missing_ids = expected_poi_ids - received_poi_ids
             if missing_ids:
-                logger.error(f"❌ LLM missing explanations for POI IDs: {missing_ids}")
+                logger.error("❌ LLM missing explanations for POI IDs: %s", missing_ids)
                 raise ValueError(f"Missing explanations for POI IDs: {missing_ids}")
 
-            # Check for generic patterns
             generic_patterns = [
                 "интересное место в категории",
                 "стоит посетить",
@@ -84,12 +81,13 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
             for exp in explanations:
                 why_lower = exp.get("why", "").lower()
                 if any(pattern in why_lower for pattern in generic_patterns):
-                    logger.error(f"❌ Generic response detected for POI {exp.get('poi_id')}: {exp.get('why')[:100]}")
-                    raise ValueError(f"Generic response detected for POI {exp.get('poi_id')}")
+                    poi_id = exp.get('poi_id')
+                    snippet = exp.get('why', '')[:100]
+                    logger.error("❌ Generic response detected for POI %s: %s", poi_id, snippet)
+                    raise ValueError(f"Generic response detected for POI {poi_id}")
 
-            logger.info(f"✓ LLM response validated: {len(explanations)} explanations, all unique")
+            logger.info("✓ LLM response validated: %s explanations, all unique", len(explanations))
 
-            # Convert to protobuf format
             pb_explanations = [
                 llm_pb2.POIExplanation(
                     poi_id=exp.get("poi_id", 0),
@@ -106,12 +104,11 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
                 atmospheric_description=parsed.get("atmospheric_description", "")
             )
 
-        except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
+        except Exception as exc:
+            logger.error("LLM generation failed: %s", exc)
             return self._fallback_response(request)
 
     def _load_system_prompt(self) -> str:
-        """Load system prompt for LLM"""
         return """Ты — опытный местный гид по Нижнему Новгороду с глубоким знанием истории, культуры и секретных мест города.
 
 Твоя задача — создавать ПЕРСОНАЛИЗИРОВАННЫЕ, ВДОХНОВЛЯЮЩИЕ объяснения для каждой точки маршрута.
@@ -147,7 +144,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
 Начинай ответ с { и заканчивай }. Ничего больше."""
 
     def _build_detailed_prompt(self, request: llm_pb2.RouteExplanationRequest) -> str:
-        """Build detailed LLM prompt"""
         poi_list = self._format_pois_for_prompt(list(request.route))
 
         return f"""
@@ -201,7 +197,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
 """
 
     def _format_pois_for_prompt(self, pois: List[llm_pb2.POIContext]) -> str:
-        """Format POIs for prompt"""
         lines = []
         for i, poi in enumerate(pois, 1):
             is_cafe = poi.category == "cafe"
@@ -227,7 +222,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return "\n\n".join(lines)
 
     def _translate_social_mode(self, mode: str) -> str:
-        """Translate social mode to Russian"""
         modes = {
             "solo": "одиночная прогулка для созерцания и фотографии",
             "couple": "прогулка вдвоём, романтическая атмосфера",
@@ -237,7 +231,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return modes.get(mode, mode)
 
     def _translate_intensity(self, intensity: str) -> str:
-        """Translate intensity to Russian"""
         intensities = {
             "low": "спокойный, расслабленный темп",
             "relaxed": "спокойный, расслабленный темп",
@@ -248,7 +241,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return intensities.get(intensity, intensity)
 
     async def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
-        """Call OpenAI API"""
         response = await self.openai_client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=[
@@ -261,7 +253,6 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return response.choices[0].message.content
 
     async def _call_anthropic(self, system_prompt: str, user_prompt: str) -> str:
-        """Call Anthropic API"""
         message = await self.anthropic_client.messages.create(
             model=settings.LLM_MODEL,
             max_tokens=4000,
@@ -274,16 +265,13 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         return message.content[0].text
 
     def _extract_json(self, content: str) -> Dict[str, Any]:
-        """Robust JSON extraction from LLM response"""
-        # Method 1: Try direct parsing
         try:
             result = json.loads(content)
             logger.debug("✓ JSON parsed directly")
             return result
-        except json.JSONDecodeError as e:
-            logger.debug(f"Direct parse failed: {e}")
+        except json.JSONDecodeError as exc:
+            logger.debug("Direct parse failed: %s", exc)
 
-        # Method 2: Strip markdown code blocks
         try:
             cleaned = re.sub(r'```json\s*', '', content)
             cleaned = re.sub(r'```\s*$', '', cleaned)
@@ -291,22 +279,20 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
             result = json.loads(cleaned)
             logger.debug("✓ JSON parsed after markdown removal")
             return result
-        except json.JSONDecodeError as e:
-            logger.debug(f"Markdown strip failed: {e}")
+        except json.JSONDecodeError as exc:
+            logger.debug("Markdown strip failed: %s", exc)
 
-        # Method 3: Find JSON object in text
         try:
             start = content.find('{')
             end = content.rfind('}')
             if start != -1 and end != -1:
-                json_str = content[start:end+1]
+                json_str = content[start:end + 1]
                 result = json.loads(json_str)
                 logger.debug("✓ JSON extracted from text boundaries")
                 return result
-        except json.JSONDecodeError as e:
-            logger.debug(f"Boundary extraction failed: {e}")
+        except json.JSONDecodeError as exc:
+            logger.debug("Boundary extraction failed: %s", exc)
 
-        # Method 4: Remove comments and try again
         try:
             cleaned = re.sub(r'//.*', '', content)
             cleaned = re.sub(r'/\*.*?\*/', '', cleaned, flags=re.DOTALL)
@@ -316,21 +302,20 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
             start = cleaned.find('{')
             end = cleaned.rfind('}')
             if start != -1 and end != -1:
-                json_str = cleaned[start:end+1]
+                json_str = cleaned[start:end + 1]
                 result = json.loads(json_str)
                 logger.debug("✓ JSON parsed after comment removal")
                 return result
-        except json.JSONDecodeError as e:
-            logger.debug(f"Comment removal failed: {e}")
+        except json.JSONDecodeError as exc:
+            logger.debug("Comment removal failed: %s", exc)
 
-        logger.error(f"❌ All JSON parsing methods failed")
-        logger.error(f"First 500 chars: {content[:500]}")
-        logger.error(f"Last 200 chars: {content[-200:]}")
+        logger.error("❌ All JSON parsing methods failed")
+        logger.error("First 500 chars: %s", content[:500])
+        logger.error("Last 200 chars: %s", content[-200:])
 
         raise json.JSONDecodeError("Failed to parse LLM response", content, 0)
 
     def _fallback_response(self, request: llm_pb2.RouteExplanationRequest) -> llm_pb2.RouteExplanationResponse:
-        """Fallback response when LLM fails"""
         explanations = [
             llm_pb2.POIExplanation(
                 poi_id=poi.id,

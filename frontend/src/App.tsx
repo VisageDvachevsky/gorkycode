@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import Hero from './components/Hero'
 import RouteWizard from './components/RouteWizard'
-import RouteViewer from './components/RouteViewer'
+import RouteViewer from './components/route-viewer'
 import type { RouteResponse } from './types'
 
 const queryClient = new QueryClient({

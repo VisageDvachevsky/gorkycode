@@ -1,5 +1,3 @@
-"""Async 2GIS API client used by the route planner service."""
-
 from __future__ import annotations
 
 import hashlib
@@ -17,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 class TwoGISClient:
-    """Thin async wrapper around 2GIS HTTP APIs with Redis caching."""
 
     ROUTING_URL = "https://routing.api.2gis.com/routing/7.0.0/global"
     DISTANCE_MATRIX_URL = "https://routing.api.2gis.com/get_dist_matrix"
@@ -35,29 +32,33 @@ class TwoGISClient:
             self.redis_client = await redis.from_url(settings.REDIS_URL)
             logger.info("2GIS client: connected to Redis cache")
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
     def _cache_key(self, prefix: str, params: Dict[str, Any]) -> str:
         payload = json.dumps(params, sort_keys=True, ensure_ascii=False)
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         return f"2gis:{prefix}:{digest}"
 
     async def _get_cached(self, key: str) -> Optional[Any]:
-        if not self.redis_client:
+        client = self.redis_client
+        if not client:
             await self.connect_redis()
+            client = self.redis_client
+        if not client:
+            return None
 
-        cached = await self.redis_client.get(key)  # type: ignore[assignment]
+        cached = await client.get(key)
         if cached:
             return json.loads(cached)
         return None
 
     async def _set_cache(self, key: str, value: Any, ttl: int = 3600) -> None:
-        if not self.redis_client:
+        client = self.redis_client
+        if not client:
             await self.connect_redis()
+            client = self.redis_client
+        if not client:
+            return
 
-        await self.redis_client.set(key, json.dumps(value), ex=ttl)  # type: ignore[arg-type]
+        await client.set(key, json.dumps(value), ex=ttl)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -80,7 +81,7 @@ class TwoGISClient:
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 response = await client.post(url, params=params, json=json_body)
-            except httpx.TimeoutException as exc:  # pragma: no cover - network
+            except httpx.TimeoutException as exc:
                 logger.error("2GIS request timeout: %s", url)
                 raise exc
 
@@ -94,20 +95,13 @@ class TwoGISClient:
         logger.error("2GIS error %s: %s", response.status_code, response.text)
         return None
 
-    # ------------------------------------------------------------------
-    # Public helpers
-    # ------------------------------------------------------------------
-
     async def get_walking_route(
         self, points: List[Tuple[float, float]]
     ) -> Optional[Dict[str, Any]]:
-        """Request a walking route with full geometry between points."""
-
         if len(points) < 2:
             return None
 
         if len(points) > 10:
-            # Free tier limitation – keep deterministic subset of points.
             logger.warning("Too many waypoints (%s), sampling down to 10", len(points))
             indices = [0]
             step = max(1, (len(points) - 2) // 8)
@@ -150,8 +144,6 @@ class TwoGISClient:
     async def get_public_transport_route(
         self, start: Tuple[float, float], end: Tuple[float, float]
     ) -> Optional[Dict[str, Any]]:
-        """Best-effort call to 2GIS public transport routing."""
-
         cache_key = self._cache_key("transit", {"start": start, "end": end})
         cached = await self._get_cached(cache_key)
         if cached:
@@ -337,7 +329,6 @@ class TwoGISClient:
         if not route_data:
             return None
 
-        # 2GIS returns result either as dict or list.
         if isinstance(route_data, list):
             route_data = route_data[0] if route_data else None
         if not isinstance(route_data, dict):
@@ -405,7 +396,6 @@ class TwoGISClient:
                 }
 
             if isinstance(section_type, str) and "walk" in section_type:
-                # Walk sections before/after transit – append textual note.
                 walk_length = section.get("length") or section.get("distance")
                 if walk_length:
                     notes.append(
@@ -426,10 +416,6 @@ class TwoGISClient:
             "alighting_stop": alighting_stop,
             "notes": [note for note in notes if note],
         }
-
-    # ------------------------------------------------------------------
-    # Math helpers
-    # ------------------------------------------------------------------
 
     def calculate_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         from math import radians, sin, cos, sqrt, atan2
@@ -452,7 +438,7 @@ class TwoGISClient:
                 lon_str, lat_str = pair.strip().split()[:2]
                 result.append((float(lat_str), float(lon_str)))
             return result
-        except Exception:  # pragma: no cover - defensive
+        except Exception:
             logger.debug("Failed to parse WKT geometry: %s", wkt[:80])
             return []
 

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
-from typing import List
-from pydantic import BaseModel
 import logging
+from typing import List
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from app.grpc.clients import grpc_clients
 
@@ -16,8 +17,8 @@ class CategoryResponse(BaseModel):
 
 
 @router.get("/list", response_model=List[CategoryResponse])
-async def get_categories():
-    """Get all available POI categories with counts via POI Service"""
+async def get_categories() -> List[CategoryResponse]:
+    """Get all available POI categories with counts via POI Service."""
     try:
         categories = await grpc_clients.poi_client.get_categories()
         
@@ -30,11 +31,11 @@ async def get_categories():
             for cat in categories
         ]
         
-        logger.info(f"Retrieved {len(response)} categories from POI service")
+        logger.info("Retrieved %s categories from POI service", len(response))
         return response
-        
-    except Exception as e:
-        logger.error(f"Failed to get categories: {e}")
+
+    except Exception as exc:
+        logger.error("Failed to get categories: %s", exc)
         raise HTTPException(
             status_code=503,
             detail="POI Service unavailable"
@@ -42,8 +43,8 @@ async def get_categories():
 
 
 @router.get("/popular", response_model=List[CategoryResponse])
-async def get_popular_categories(limit: int = 5):
-    """Get most popular categories"""
+async def get_popular_categories(limit: int = 5) -> List[CategoryResponse]:
+    """Get most popular categories."""
     try:
         all_categories = await get_categories()
         sorted_categories = sorted(all_categories, key=lambda x: x.count, reverse=True)
@@ -51,8 +52,8 @@ async def get_popular_categories(limit: int = 5):
         
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to get popular categories: {e}")
+    except Exception as exc:
+        logger.error("Failed to get popular categories: %s", exc)
         raise HTTPException(
             status_code=503,
             detail="POI Service unavailable"

@@ -51,7 +51,6 @@ INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate great-circle distance between two points."""
     radius = 6371.0
     d_lat = radians(lat2 - lat1)
     d_lon = radians(lon2 - lon1)
@@ -302,7 +301,6 @@ async def _maybe_add_coffee_break(
 
 @router.post("/plan", response_model=RouteResponse)
 async def plan_route(request: RouteRequest) -> RouteResponse:
-    """Plan personalized tourist route via gRPC microservices."""
 
     start_lat, start_lon, start_label = await _resolve_start_location(request)
     tz = request.resolved_timezone()
@@ -377,7 +375,6 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     ordered_infos: List[route_pb2.POIInfo] = list(route_plan.optimized_route)
     ranked_by_id = {poi.poi_id: poi for poi in scored_pois}
 
-    # Optionally enrich with metadata from POI service
     full_details: Dict[int, Dict] = {}
     needed_categories = {
         ranked_by_id[info.id].category

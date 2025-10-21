@@ -20,16 +20,17 @@ class GeocodingServicer(geocoding_pb2_grpc.GeocodingServiceServicer):
         }
 
     async def initialize(self):
-        """Initialize geocoding service"""
         logger.info("✓ Geocoding Service initialized")
-        logger.info(f"Nizhny Novgorod bounds: lat[{self.nn_bounds['lat_min']}, {self.nn_bounds['lat_max']}], lon[{self.nn_bounds['lon_min']}, {self.nn_bounds['lon_max']}]")
+        logger.info(
+            f"Nizhny Novgorod bounds: lat[{self.nn_bounds['lat_min']}, {self.nn_bounds['lat_max']}], "
+            f"lon[{self.nn_bounds['lon_min']}, {self.nn_bounds['lon_max']}]"
+        )
     
     async def GeocodeAddress(
         self,
         request: geocoding_pb2.GeocodeRequest,
         context
     ) -> geocoding_pb2.GeocodeResponse:
-        """Geocode address using 2GIS API"""
         try:
             async with httpx.AsyncClient() as client:
                 params = {
@@ -64,10 +65,10 @@ class GeocodingServicer(geocoding_pb2_grpc.GeocodingServiceServicer):
                 formatted_address=""
             )
             
-        except Exception as e:
-            logger.error(f"Geocoding failed: {e}")
+        except Exception as exc:
+            logger.error("Geocoding failed: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
-            context.set_details(f"Geocoding failed: {str(e)}")
+            context.set_details(f"Geocoding failed: {exc}")
             return geocoding_pb2.GeocodeResponse(success=False)
     
     async def ValidateCoordinates(
@@ -75,17 +76,17 @@ class GeocodingServicer(geocoding_pb2_grpc.GeocodingServiceServicer):
         request: geocoding_pb2.CoordinateValidationRequest,
         context
     ) -> geocoding_pb2.CoordinateValidationResponse:
-        """Validate coordinates are within Nizhny Novgorod"""
         lat, lon = request.lat, request.lon
-        
-        if (self.nn_bounds["lat_min"] <= lat <= self.nn_bounds["lat_max"] and
-            self.nn_bounds["lon_min"] <= lon <= self.nn_bounds["lon_max"]):
+
+        if (
+            self.nn_bounds["lat_min"] <= lat <= self.nn_bounds["lat_max"]
+            and self.nn_bounds["lon_min"] <= lon <= self.nn_bounds["lon_max"]
+        ):
             return geocoding_pb2.CoordinateValidationResponse(
                 valid=True,
                 reason="Coordinates are valid"
             )
-        else:
-            return geocoding_pb2.CoordinateValidationResponse(
-                valid=False,
-                reason="Coordinates are outside Nizhny Novgorod bounds"
-            )
+        return geocoding_pb2.CoordinateValidationResponse(
+            valid=False,
+            reason="Coordinates are outside Nizhny Novgorod bounds"
+        )
