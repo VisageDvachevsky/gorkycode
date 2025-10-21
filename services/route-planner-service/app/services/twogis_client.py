@@ -23,6 +23,7 @@ class TwoGISClient:
     def __init__(self) -> None:
         self.api_key = settings.TWOGIS_API_KEY
         self.redis_client: Optional[redis.Redis] = None
+        self._http_client: Optional[httpx.AsyncClient] = None
 
         if not self.api_key:
             logger.warning("2GIS API key is not configured – routing requests will fail")
@@ -60,6 +61,20 @@ class TwoGISClient:
 
         await client.set(key, json.dumps(value), ex=ttl)
 
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        client = self._http_client
+        if client is None:
+            timeout = httpx.Timeout(45.0, connect=10.0)
+            client = httpx.AsyncClient(timeout=timeout)
+            self._http_client = client
+        return client
+
+    async def close(self) -> None:
+        client = self._http_client
+        if client:
+            await client.aclose()
+            self._http_client = None
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=5),
@@ -78,12 +93,18 @@ class TwoGISClient:
         params = dict(params)
         params["key"] = self.api_key
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
-                response = await client.post(url, params=params, json=json_body)
-            except httpx.TimeoutException as exc:
-                logger.error("2GIS request timeout: %s", url)
-                raise exc
+        client = await self._get_http_client()
+
+        try:
+            response = await client.post(
+                url,
+                params=params,
+                json=json_body,
+                timeout=timeout,
+            )
+        except httpx.TimeoutException as exc:
+            logger.error("2GIS request timeout: %s", url)
+            raise exc
 
         if response.status_code == 200:
             return response.json()

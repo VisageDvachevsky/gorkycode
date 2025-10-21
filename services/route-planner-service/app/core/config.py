@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     WALK_SPEED_KMH: float = 4.0
     TRANSIT_DISTANCE_THRESHOLD_KM: float = 2.0
+    DIST_MATRIX_CONCURRENCY: int = 4
 
     TWOGIS_API_KEY: str | None = None
     NAVITIA_API_KEY: str | None = None

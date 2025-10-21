@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -48,6 +49,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
     def __init__(self) -> None:
         self.walk_speed_kmh = settings.WALK_SPEED_KMH
+        self._matrix_concurrency = max(1, settings.DIST_MATRIX_CONCURRENCY)
 
     async def initialize(self) -> None:
 
@@ -267,12 +269,59 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 return None
 
         logger.info(
-            "Computing distance matrix in batches: %s points", len(all_points)
+            "Computing distance matrix in batches: %s points (concurrency=%s)",
+            len(all_points),
+            self._matrix_concurrency,
         )
 
         n = len(all_points)
         matrix = np.full((n, n), float("inf"))
         chunk_size = max(2, max_points // 2)
+        semaphore = asyncio.Semaphore(self._matrix_concurrency)
+        tasks: List[asyncio.Task] = []
+
+        async def fetch_block(
+            src_indices: List[int],
+            tgt_indices: List[int],
+            block_points: List[CoordinateTuple],
+            block_sources: List[int],
+            block_targets: List[int],
+        ) -> Tuple[List[int], List[int], List[List[float]]]:
+            async with semaphore:
+                try:
+                    data = await twogis_client.request_distance_matrix(
+                        block_points,
+                        block_sources,
+                        block_targets,
+                        transport="pedestrian",
+                    )
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Distance matrix batch failed ({src_indices}→{tgt_indices}): {exc}"
+                    ) from exc
+
+            if not data:
+                raise RuntimeError(
+                    f"Empty distance matrix batch ({src_indices}→{tgt_indices})"
+                )
+
+            block_matrix = twogis_client.parse_distance_matrix(
+                data,
+                num_sources=len(block_sources),
+                num_targets=len(block_targets),
+            )
+
+            normalized: List[List[float]] = []
+            for s_offset, s_idx in enumerate(src_indices):
+                row: List[float] = []
+                for t_offset, t_idx in enumerate(tgt_indices):
+                    value = block_matrix[s_offset][t_offset]
+                    if not np.isfinite(value):
+                        value = geodesic(all_points[s_idx], all_points[t_idx]).km
+                    row.append(value)
+                normalized.append(row)
+
+            return src_indices, tgt_indices, normalized
 
         for src_start in range(0, n, chunk_size):
             src_indices = list(range(src_start, min(n, src_start + chunk_size)))
@@ -292,42 +341,32 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 block_sources = [local_index[idx] for idx in src_indices]
                 block_targets = [local_index[idx] for idx in tgt_indices]
 
-                try:
-                    data = await twogis_client.request_distance_matrix(
-                        block_points,
-                        block_sources,
-                        block_targets,
-                        transport="pedestrian",
+                tasks.append(
+                    asyncio.create_task(
+                        fetch_block(
+                            src_indices,
+                            tgt_indices,
+                            block_points,
+                            block_sources,
+                            block_targets,
+                        )
                     )
-                except Exception as exc:
-                    logger.warning(
-                        "Distance matrix batch failed (%s→%s): %s",
-                        src_indices,
-                        tgt_indices,
-                        exc,
-                    )
-                    return None
-
-                if not data:
-                    logger.warning(
-                        "Distance matrix batch empty (%s→%s) – falling back",
-                        src_indices,
-                        tgt_indices,
-                    )
-                    return None
-
-                block_matrix = twogis_client.parse_distance_matrix(
-                    data,
-                    num_sources=len(block_sources),
-                    num_targets=len(block_targets),
                 )
 
-                for s_offset, s_idx in enumerate(src_indices):
-                    for t_offset, t_idx in enumerate(tgt_indices):
-                        value = block_matrix[s_offset][t_offset]
-                        if not np.isfinite(value):
-                            value = geodesic(all_points[s_idx], all_points[t_idx]).km
-                        matrix[s_idx][t_idx] = value
+        if not tasks:
+            return None
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning("Distance matrix batch failed: %s", result)
+                return None
+
+            src_indices, tgt_indices, block_values = result
+            for s_offset, s_idx in enumerate(src_indices):
+                for t_offset, t_idx in enumerate(tgt_indices):
+                    matrix[s_idx][t_idx] = block_values[s_offset][t_offset]
 
         for i in range(n):
             matrix[i][i] = 0.0
