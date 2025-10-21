@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
 RUN pip install --no-cache-dir poetry==1.7.1
 
 COPY services/llm-service/pyproject.toml services/llm-service/poetry.lock* ./
+COPY services/python-common /python-common
 
 RUN poetry config virtualenvs.create false && \
     poetry install --only main --no-root --no-interaction --no-ansi

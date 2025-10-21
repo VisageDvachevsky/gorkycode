@@ -37,18 +37,39 @@ function LocationPicker({ onLocationSelect }: { onLocationSelect: (lat: number, 
 
 export default function StepLocation({ formData, updateFormData }: Props) {
   const [locationMode, setLocationMode] = useState<LocationMode>('address')
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'locating' | 'success' | 'error'>('idle')
 
   const handleModeChange = (mode: LocationMode) => {
     setLocationMode(mode)
     if (mode === 'address') {
       updateFormData({ start_lat: undefined, start_lon: undefined })
     } else {
-      updateFormData({ 
+      updateFormData({
         start_address: undefined,
         start_lat: formData.start_lat || DEFAULT_CENTER.lat,
         start_lon: formData.start_lon || DEFAULT_CENTER.lon,
       })
     }
+  }
+
+  const locateUser = () => {
+    if (!navigator.geolocation) {
+      setGeoStatus('error')
+      return
+    }
+    setGeoStatus('locating')
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const { latitude, longitude } = position.coords
+        updateFormData({ start_lat: latitude, start_lon: longitude, start_address: undefined })
+        setLocationMode('map')
+        setGeoStatus('success')
+      },
+      () => {
+        setGeoStatus('error')
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
   }
 
   return (
@@ -70,6 +91,19 @@ export default function StepLocation({ formData, updateFormData }: Props) {
         <p className="text-lg text-slate-600 dark:text-slate-400">
           Укажите точку старта вашей прогулки
         </p>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={locateUser}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold shadow-lg hover:shadow-emerald-300/50 transition-transform hover:-translate-y-0.5"
+          >
+            <Navigation className="w-4 h-4" />
+            Определить автоматически
+          </button>
+          {geoStatus === 'locating' && <span className="text-sm text-slate-500">Определяем текущее местоположение...</span>}
+          {geoStatus === 'error' && <span className="text-sm text-red-500">Не удалось определить позицию</span>}
+          {geoStatus === 'success' && <span className="text-sm text-emerald-600">Позиция обновлена</span>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

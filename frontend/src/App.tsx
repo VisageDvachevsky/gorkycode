@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import Hero from './components/Hero'
@@ -18,9 +18,60 @@ const queryClient = new QueryClient({
 
 type AppState = 'hero' | 'wizard' | 'viewing'
 
+const encodeRouteForShare = (route: RouteResponse) => {
+  const payload = JSON.stringify(route)
+  const bytes = new TextEncoder().encode(payload)
+  let binary = ''
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte)
+  })
+  return window.btoa(binary).replace(/=+$/, '')
+}
+
+const decodeRouteFromShare = (encoded: string): RouteResponse | null => {
+  try {
+    const padding = encoded.length % 4 === 0 ? '' : '='.repeat(4 - (encoded.length % 4))
+    const binary = window.atob(encoded + padding)
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0))
+    const json = new TextDecoder().decode(bytes)
+    return JSON.parse(json) as RouteResponse
+  } catch (error) {
+    console.error('Failed to restore route from share link', error)
+    return null
+  }
+}
+
 function App() {
   const [appState, setAppState] = useState<AppState>('hero')
   const [route, setRoute] = useState<RouteResponse | null>(null)
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const encoded = params.get('itinerary')
+    if (encoded) {
+      const restored = decodeRouteFromShare(encoded)
+      if (restored) {
+        setRoute(restored)
+        setAppState('viewing')
+      }
+    }
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    const url = new URL(window.location.href)
+    if (!route) {
+      url.searchParams.delete('itinerary')
+    } else {
+      const encoded = encodeRouteForShare(route)
+      url.searchParams.set('itinerary', encoded)
+    }
+    const query = url.searchParams.toString()
+    const next = `${url.pathname}${query ? `?${query}` : ''}`
+    window.history.replaceState({}, '', next)
+  }, [route, hydrated])
 
   const handleStartJourney = () => {
     setAppState('wizard')
@@ -43,7 +94,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-indigo-950 transition-colors duration-500">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-emerald-50 to-sky-50 transition-colors duration-500">
         <AnimatePresence mode="wait">
           {appState === 'hero' && (
             <motion.div

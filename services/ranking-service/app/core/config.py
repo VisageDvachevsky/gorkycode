@@ -3,7 +3,8 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     GRPC_PORT: int = 50052
-    
+    METRICS_PORT: int = 9090
+
     DATABASE_URL: str = "postgresql+asyncpg://aitourist:password@postgresql:5432/aitourist_db"
     
     class Config:

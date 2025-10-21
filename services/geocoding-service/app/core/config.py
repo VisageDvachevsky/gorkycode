@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     GRPC_PORT: int = 50055
+    METRICS_PORT: int = 9090
 
     TWOGIS_API_KEY: str = ""
 
