@@ -9,6 +9,7 @@ interface Props {
   setExpandedPoi: (id: number | null) => void
   formatTime: (timestamp: string) => string
   timelineRef: RefObject<HTMLDivElement>
+  onPoiHover: (id: number | null) => void
 }
 
 interface PoiCardProps {
@@ -17,15 +18,18 @@ interface PoiCardProps {
   onToggle: () => void
   formatTime: (timestamp: string) => string
   isLast: boolean
+  onHover: (id: number | null) => void
 }
 
-const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast }: PoiCardProps) => (
+const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast, onHover }: PoiCardProps) => (
   <div
     className={`bg-white dark:bg-slate-800 border-2 rounded-2xl overflow-hidden transition-all ${
       poi.is_coffee_break
         ? 'border-amber-300 dark:border-amber-700'
         : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
     } ${isExpanded ? 'shadow-2xl scale-[1.02]' : 'shadow-lg hover:shadow-xl'}`}
+    onMouseEnter={() => onHover(poi.poi_id)}
+    onMouseLeave={() => onHover(null)}
   >
     <button onClick={onToggle} className="w-full p-6 text-left">
       <div className="flex items-start gap-4">
@@ -50,6 +54,19 @@ const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast }: PoiCardProps
                 </span>
                 <span>•</span>
                 <span>{poi.est_visit_minutes} минут</span>
+                {poi.opening_hours && (
+                  <>
+                    <span>•</span>
+                    <span
+                      className={`flex items-center gap-1 ${
+                        poi.is_open ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'
+                      }`}
+                    >
+                      {poi.is_open ? 'Открыто' : 'График'}
+                      <span className="font-medium text-xs">{poi.opening_hours}</span>
+                    </span>
+                  </>
+                )}
                 {poi.is_coffee_break && (
                   <>
                     <span>•</span>
@@ -59,6 +76,11 @@ const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast }: PoiCardProps
                   </>
                 )}
               </div>
+              {poi.availability_note && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">
+                  {poi.availability_note}
+                </p>
+              )}
             </div>
             {isExpanded ? (
               <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
@@ -92,14 +114,19 @@ const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast }: PoiCardProps
     {!isLast && (
       <div className="px-6 pb-4 flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
         <Navigation className="w-4 h-4" />
-        <span>Переход к следующей точке</span>
+        <span>
+          Переход к следующей точке
+          {poi.distance_from_previous_km && !poi.is_coffee_break
+            ? ` • ${poi.distance_from_previous_km.toFixed(1)} км`
+            : ''}
+        </span>
         <div className="flex-1 h-px bg-gradient-to-r from-slate-300 dark:from-slate-700 to-transparent" />
       </div>
     )}
   </div>
 )
 
-export default function ListView({ route, expandedPoi, setExpandedPoi, formatTime, timelineRef }: Props) {
+export default function ListView({ route, expandedPoi, setExpandedPoi, formatTime, timelineRef, onPoiHover }: Props) {
   return (
     <div className="space-y-6">
       <motion.div
@@ -129,6 +156,7 @@ export default function ListView({ route, expandedPoi, setExpandedPoi, formatTim
               onToggle={() => setExpandedPoi(expandedPoi === poi.poi_id ? null : poi.poi_id)}
               formatTime={formatTime}
               isLast={index === route.route.length - 1}
+              onHover={onPoiHover}
             />
           </motion.div>
         ))}

@@ -1,5 +1,7 @@
 import logging
-from typing import List
+from typing import List, Optional
+
+from datetime import time as dt_time
 
 import grpc
 import httpx
@@ -69,7 +71,9 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                         photo_tip=poi.photo_tip or "",
                         address=poi.address or "",
                         social_mode=poi.social_mode or "any",
-                        intensity_level=poi.intensity_level or "medium"
+                        intensity_level=poi.intensity_level or "medium",
+                        open_time=self._format_time(poi.open_time),
+                        close_time=self._format_time(poi.close_time),
                     )
                     for poi in pois
                 ]
@@ -159,14 +163,19 @@ class POIServicer(poi_pb2_grpc.POIServiceServicer):
                 
                 nearby_cafes.sort(key=lambda x: x.distance)
                 logger.info("✓ Found %s cafes from database", len(nearby_cafes))
-                
+
                 return poi_pb2.CafeSearchResponse(cafes=nearby_cafes[:10])
                 
         except Exception as exc:
             logger.error("Error finding cafes: %s", exc)
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(f"Cafe search error: {exc}")
-            return poi_pb2.CafeSearchResponse()
+        return poi_pb2.CafeSearchResponse()
+
+    def _format_time(self, value: Optional[dt_time]) -> str:
+        if not value:
+            return ""
+        return value.strftime("%H:%M")
     
     async def _search_2gis_cafes(
         self,

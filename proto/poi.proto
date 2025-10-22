@@ -66,4 +66,6 @@ message POI {
   string address = 13;
   string social_mode = 14;
   string intensity_level = 15;
+  string open_time = 16;
+  string close_time = 17;
 }

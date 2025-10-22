@@ -13,10 +13,12 @@ grpcio-tools = "^1.60.0"
 protobuf = "^4.25.0"
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
+ai-tourist-common = {path = "../python-common", develop = true}
+httpx = "^0.26.0"
+redis = "^5.0.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.4.0"
-httpx = "^0.26.0"
 
 [build-system]
 requires = ["poetry-core"]

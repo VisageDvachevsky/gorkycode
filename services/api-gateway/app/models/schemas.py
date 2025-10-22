@@ -82,6 +82,11 @@ class POIInRoute(BaseModel):
     is_coffee_break: bool = False
     is_open: Optional[bool] = None
     opening_hours: Optional[str] = None
+    availability_note: Optional[str] = None
+    category: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    emoji: Optional[str] = None
+    distance_from_previous_km: Optional[float] = None
 
 
 class CoordinatePoint(BaseModel):
@@ -141,3 +146,5 @@ class RouteResponse(BaseModel):
     movement_legs: List[RouteLegInstruction] = Field(default_factory=list)
     walking_distance_km: float = 0.0
     transit_distance_km: float = 0.0
+    weather_advice: Optional[str] = None
+    share_token: Optional[str] = None

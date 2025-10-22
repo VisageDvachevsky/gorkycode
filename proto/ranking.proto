@@ -12,6 +12,7 @@ message RankingRequest {
   string intensity = 3;
   int32 top_k = 4;
   repeated string categories_filter = 5;
+  optional int32 start_time_minutes = 6;
 }
 
 message RankingResponse {
@@ -30,4 +31,8 @@ message ScoredPOI {
   double rating = 9;
   double score = 10;
   repeated float embedding = 11;
+  string social_mode = 12;
+  string intensity_level = 13;
+  string open_time = 14;
+  string close_time = 15;
 }

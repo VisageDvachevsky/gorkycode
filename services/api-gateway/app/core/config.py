@@ -1,14 +1,23 @@
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     ENVIRONMENT: str = "production"
+    METRICS_PORT: int = 9090
     EMBEDDING_SERVICE_URL: str = "embedding-service:50051"
     RANKING_SERVICE_URL: str = "ranking-service:50052"
     ROUTE_SERVICE_URL: str = "route-planner-service:50053"
     LLM_SERVICE_URL: str = "llm-service:50054"
     GEOCODING_SERVICE_URL: str = "geocoding-service:50055"
     POI_SERVICE_URL: str = "poi-service:50056"
+    OSRM_BASE_URL: str = "http://osrm:5000"
+    TWOGIS_API_KEY: str | None = None
+    TWOGIS_LOCALE: str = "ru_RU"
+    ELEVATION_SERVICE_URL: str | None = "https://api.open-elevation.com/api/v1/lookup"
+    REDIS_URL: str = "redis://redis:6379/0"
+    SHARE_TTL_SECONDS: int = 60 * 60 * 24 * 14
     
     class Config:
         env_file = ".env"

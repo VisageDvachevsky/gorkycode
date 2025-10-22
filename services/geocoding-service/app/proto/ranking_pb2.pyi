@@ -7,18 +7,20 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class RankingRequest(_message.Message):
-    __slots__ = ("user_embedding", "social_mode", "intensity", "top_k", "categories_filter")
+    __slots__ = ("user_embedding", "social_mode", "intensity", "top_k", "categories_filter", "start_time_minutes")
     USER_EMBEDDING_FIELD_NUMBER: _ClassVar[int]
     SOCIAL_MODE_FIELD_NUMBER: _ClassVar[int]
     INTENSITY_FIELD_NUMBER: _ClassVar[int]
     TOP_K_FIELD_NUMBER: _ClassVar[int]
     CATEGORIES_FILTER_FIELD_NUMBER: _ClassVar[int]
+    START_TIME_MINUTES_FIELD_NUMBER: _ClassVar[int]
     user_embedding: _containers.RepeatedScalarFieldContainer[float]
     social_mode: str
     intensity: str
     top_k: int
     categories_filter: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, user_embedding: _Optional[_Iterable[float]] = ..., social_mode: _Optional[str] = ..., intensity: _Optional[str] = ..., top_k: _Optional[int] = ..., categories_filter: _Optional[_Iterable[str]] = ...) -> None: ...
+    start_time_minutes: int
+    def __init__(self, user_embedding: _Optional[_Iterable[float]] = ..., social_mode: _Optional[str] = ..., intensity: _Optional[str] = ..., top_k: _Optional[int] = ..., categories_filter: _Optional[_Iterable[str]] = ..., start_time_minutes: _Optional[int] = ...) -> None: ...
 
 class RankingResponse(_message.Message):
     __slots__ = ("scored_pois",)
@@ -27,7 +29,7 @@ class RankingResponse(_message.Message):
     def __init__(self, scored_pois: _Optional[_Iterable[_Union[ScoredPOI, _Mapping]]] = ...) -> None: ...
 
 class ScoredPOI(_message.Message):
-    __slots__ = ("poi_id", "name", "lat", "lon", "category", "tags", "description", "avg_visit_minutes", "rating", "score", "embedding")
+    __slots__ = ("poi_id", "name", "lat", "lon", "category", "tags", "description", "avg_visit_minutes", "rating", "score", "embedding", "social_mode", "intensity_level", "open_time", "close_time")
     POI_ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     LAT_FIELD_NUMBER: _ClassVar[int]
@@ -39,6 +41,10 @@ class ScoredPOI(_message.Message):
     RATING_FIELD_NUMBER: _ClassVar[int]
     SCORE_FIELD_NUMBER: _ClassVar[int]
     EMBEDDING_FIELD_NUMBER: _ClassVar[int]
+    SOCIAL_MODE_FIELD_NUMBER: _ClassVar[int]
+    INTENSITY_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    OPEN_TIME_FIELD_NUMBER: _ClassVar[int]
+    CLOSE_TIME_FIELD_NUMBER: _ClassVar[int]
     poi_id: int
     name: str
     lat: float
@@ -50,4 +56,8 @@ class ScoredPOI(_message.Message):
     rating: float
     score: float
     embedding: _containers.RepeatedScalarFieldContainer[float]
-    def __init__(self, poi_id: _Optional[int] = ..., name: _Optional[str] = ..., lat: _Optional[float] = ..., lon: _Optional[float] = ..., category: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., avg_visit_minutes: _Optional[int] = ..., rating: _Optional[float] = ..., score: _Optional[float] = ..., embedding: _Optional[_Iterable[float]] = ...) -> None: ...
+    social_mode: str
+    intensity_level: str
+    open_time: str
+    close_time: str
+    def __init__(self, poi_id: _Optional[int] = ..., name: _Optional[str] = ..., lat: _Optional[float] = ..., lon: _Optional[float] = ..., category: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., avg_visit_minutes: _Optional[int] = ..., rating: _Optional[float] = ..., score: _Optional[float] = ..., embedding: _Optional[_Iterable[float]] = ..., social_mode: _Optional[str] = ..., intensity_level: _Optional[str] = ..., open_time: _Optional[str] = ..., close_time: _Optional[str] = ...) -> None: ...

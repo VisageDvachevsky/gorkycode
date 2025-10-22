@@ -6,6 +6,7 @@ from typing import Any, Dict, Generic, List, Optional, Sequence, Tuple, TypeVar
 
 import grpc
 
+from ai_tourist_common import get_trace_id
 from app.core.config import settings
 from app.proto import (
     embedding_pb2,
@@ -60,6 +61,12 @@ class GrpcClient(Generic[TStub], ABC):
     def is_ready(self) -> bool:
         return self._stub is not None
 
+    def _metadata(self) -> Sequence[Tuple[str, str]]:
+        trace_id = get_trace_id()
+        if trace_id and trace_id != "-":
+            return (("x-trace-id", trace_id),)
+        return ()
+
     @abstractmethod
     def _create_stub(self, channel: grpc.aio.Channel) -> TStub:
         raise NotImplementedError
@@ -74,7 +81,7 @@ class EmbeddingClient(GrpcClient[embedding_pb2_grpc.EmbeddingServiceStub]):
 
     async def generate_embedding(self, text: str, use_cache: bool = True) -> embedding_pb2.EmbeddingResponse:
         request = embedding_pb2.EmbeddingRequest(text=text, use_cache=use_cache)
-        return await self.stub().GenerateEmbedding(request)
+        return await self.stub().GenerateEmbedding(request, metadata=self._metadata())
 
 
 class POIClient(GrpcClient[poi_pb2_grpc.POIServiceStub]):
@@ -86,11 +93,13 @@ class POIClient(GrpcClient[poi_pb2_grpc.POIServiceStub]):
 
     async def get_all_pois(self, categories: Optional[List[str]] = None, with_embeddings: bool = True):
         request = poi_pb2.GetPOIsRequest(categories=categories or [], with_embeddings=with_embeddings)
-        response = await self.stub().GetAllPOIs(request)
+        response = await self.stub().GetAllPOIs(request, metadata=self._metadata())
         return response.pois
 
     async def get_categories(self) -> List[Dict[str, int | str]]:
-        response = await self.stub().GetCategories(poi_pb2.GetCategoriesRequest())
+        response = await self.stub().GetCategories(
+            poi_pb2.GetCategoriesRequest(), metadata=self._metadata()
+        )
         return [
             {"value": category.value, "label": category.label, "count": category.count}
             for category in response.categories
@@ -98,7 +107,7 @@ class POIClient(GrpcClient[poi_pb2_grpc.POIServiceStub]):
 
     async def find_cafes_near_location(self, lat: float, lon: float, radius_km: float = 1.0):
         request = poi_pb2.CafeSearchRequest(lat=lat, lon=lon, radius_km=radius_km)
-        response = await self.stub().FindCafesNearLocation(request)
+        response = await self.stub().FindCafesNearLocation(request, metadata=self._metadata())
         return response.cafes
 
 
@@ -116,15 +125,20 @@ class RankingClient(GrpcClient[ranking_pb2_grpc.RankingServiceStub]):
         intensity: str,
         top_k: int = 20,
         categories_filter: Optional[List[str]] = None,
+        start_time_minutes: Optional[int] = None,
     ):
-        request = ranking_pb2.RankingRequest(
-            user_embedding=user_embedding,
-            social_mode=social_mode,
-            intensity=intensity,
-            top_k=top_k,
-            categories_filter=categories_filter or [],
-        )
-        response = await self.stub().RankPOIs(request)
+        request_kwargs = {
+            "user_embedding": user_embedding,
+            "social_mode": social_mode,
+            "intensity": intensity,
+            "top_k": top_k,
+            "categories_filter": categories_filter or [],
+        }
+        if start_time_minutes is not None:
+            request_kwargs["start_time_minutes"] = start_time_minutes
+
+        request = ranking_pb2.RankingRequest(**request_kwargs)
+        response = await self.stub().RankPOIs(request, metadata=self._metadata())
         return response.scored_pois
 
 
@@ -150,7 +164,7 @@ class RoutePlannerClient(GrpcClient[route_pb2_grpc.RoutePlannerServiceStub]):
             available_hours=available_hours,
             intensity=intensity,
         )
-        return await self.stub().OptimizeRoute(request)
+        return await self.stub().OptimizeRoute(request, metadata=self._metadata())
 
     async def calculate_route_geometry(
         self,
@@ -160,7 +174,7 @@ class RoutePlannerClient(GrpcClient[route_pb2_grpc.RoutePlannerServiceStub]):
     ) -> route_pb2.RouteGeometryResponse:
         coords = [route_pb2.Coordinate(lat=lat, lon=lon) for lat, lon in waypoints]
         request = route_pb2.RouteGeometryRequest(start_lat=start_lat, start_lon=start_lon, waypoints=coords)
-        return await self.stub().CalculateRouteGeometry(request)
+        return await self.stub().CalculateRouteGeometry(request, metadata=self._metadata())
 
 
 class LLMClient(GrpcClient[llm_pb2_grpc.LLMServiceStub]):
@@ -171,7 +185,7 @@ class LLMClient(GrpcClient[llm_pb2_grpc.LLMServiceStub]):
         return llm_pb2_grpc.LLMServiceStub(channel)
 
     async def generate_route_explanation(self, request: llm_pb2.RouteExplanationRequest) -> llm_pb2.RouteExplanationResponse:
-        return await self.stub().GenerateRouteExplanation(request)
+        return await self.stub().GenerateRouteExplanation(request, metadata=self._metadata())
 
 
 class GeocodingClient(GrpcClient[geocoding_pb2_grpc.GeocodingServiceStub]):
@@ -183,11 +197,11 @@ class GeocodingClient(GrpcClient[geocoding_pb2_grpc.GeocodingServiceStub]):
 
     async def geocode_address(self, address: str, city: str = "Нижний Новгород"):
         request = geocoding_pb2.GeocodeRequest(address=address, city=city)
-        return await self.stub().GeocodeAddress(request)
+        return await self.stub().GeocodeAddress(request, metadata=self._metadata())
 
     async def validate_coordinates(self, lat: float, lon: float):
         request = geocoding_pb2.CoordinateValidationRequest(lat=lat, lon=lon)
-        return await self.stub().ValidateCoordinates(request)
+        return await self.stub().ValidateCoordinates(request, metadata=self._metadata())
 
 
 class GRPCClients:
