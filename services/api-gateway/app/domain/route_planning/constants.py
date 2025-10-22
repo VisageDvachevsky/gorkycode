@@ -5,7 +5,7 @@ from typing import Dict, Sequence, Tuple
 
 INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
     "relaxed": {
-        "target_per_hour": 1.1,
+        "target_per_hour": 1.3,
         "default_visit_minutes": 55.0,
         "min_visit_minutes": 40.0,
         "max_visit_minutes": 90.0,
@@ -13,7 +13,7 @@ INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "safety_buffer": 20.0,
     },
     "medium": {
-        "target_per_hour": 1.6,
+        "target_per_hour": 2.0,
         "default_visit_minutes": 42.0,
         "min_visit_minutes": 30.0,
         "max_visit_minutes": 70.0,
@@ -21,7 +21,7 @@ INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "safety_buffer": 15.0,
     },
     "intense": {
-        "target_per_hour": 2.3,
+        "target_per_hour": 2.8,
         "default_visit_minutes": 30.0,
         "min_visit_minutes": 20.0,
         "max_visit_minutes": 55.0,
@@ -29,7 +29,7 @@ INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "safety_buffer": 10.0,
     },
     "low": {
-        "target_per_hour": 1.1,
+        "target_per_hour": 1.3,
         "default_visit_minutes": 55.0,
         "min_visit_minutes": 40.0,
         "max_visit_minutes": 90.0,
@@ -37,7 +37,7 @@ INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "safety_buffer": 20.0,
     },
     "high": {
-        "target_per_hour": 2.3,
+        "target_per_hour": 2.8,
         "default_visit_minutes": 30.0,
         "min_visit_minutes": 20.0,
         "max_visit_minutes": 55.0,
@@ -55,17 +55,17 @@ INTENSITY_CANDIDATE_MULTIPLIER: Dict[str, float] = {
 }
 
 INTENSITY_SEARCH_RADIUS_KM: Dict[str, float] = {
-    "relaxed": 4.5,
-    "low": 4.5,
-    "medium": 6.0,
-    "intense": 7.0,
-    "high": 7.0,
+    "relaxed": 5.0,
+    "low": 5.0,
+    "medium": 7.5,
+    "intense": 10.0,
+    "high": 10.0,
 }
 
 RECOMMENDED_COFFEE_INTERVAL: Dict[str, int] = {
-    "relaxed": 95,
-    "low": 95,
-    "medium": 105,
+    "relaxed": 90,
+    "low": 90,
+    "medium": 90,
     "intense": 100,
     "high": 100,
 }

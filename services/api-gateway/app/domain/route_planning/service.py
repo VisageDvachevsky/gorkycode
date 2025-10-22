@@ -246,7 +246,7 @@ class RoutePlanner:
             6, int(round(self.request.hours * candidate_multiplier(self.request.intensity)))
         )
         buffer = max(4, int(base_candidate_target * 0.4))
-        candidate_limit = min(len(prioritized), base_candidate_target + buffer, 40)
+        candidate_limit = min(len(prioritized), base_candidate_target + buffer, 80)
 
         selected = prioritized[:candidate_limit]
         ranked_ids = [score.poi.poi_id for score in selected if getattr(score.poi, "poi_id", None)]

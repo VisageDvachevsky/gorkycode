@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -17,6 +18,9 @@ from .intensity import effective_visit_minutes, search_radius_km, transition_pad
 from .metadata import build_metadata, contains_keywords, is_history, is_street_art, normalize
 from .models import CandidateScore, WeatherSnapshot
 from .time_phase import phase_category_score, resolve_time_phase
+
+
+logger = logging.getLogger(__name__)
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:
@@ -232,6 +236,13 @@ def prioritize_candidates(
     for item in enriched:
         category = item["category"]
         penalty = diversity_penalty(category, recent[-3:])
+        if penalty > 0:
+            logger.debug(
+                "🚫 Diversity penalty %.1f for '%s' (recent: %s)",
+                penalty,
+                category,
+                recent[-3:],
+            )
         final_score = item["base_score"] - penalty * 0.15
         final_score = max(0.0, final_score)
 

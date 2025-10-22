@@ -34,7 +34,7 @@ def estimate_coffee_break_minutes(
     if remainder >= interval * 0.6:
         breaks += 1
     breaks = max(1, breaks)
-    breaks = min(breaks, max(1, int(total_minutes // 105) + 1))
+    breaks = min(breaks, max(2, int(total_minutes // 90) + 1))
     base_stay = max(18, min(35, interval / 3.2))
     stay_minutes = effective_visit_minutes(int(round(base_stay)), intensity)
     return float(breaks * stay_minutes)

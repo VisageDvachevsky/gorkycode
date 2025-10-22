@@ -55,4 +55,4 @@ def search_radius_km(intensity: str) -> float:
 
 
 def recommended_break_interval_minutes(intensity: str) -> int:
-    return RECOMMENDED_COFFEE_INTERVAL.get(intensity, 105)
+    return RECOMMENDED_COFFEE_INTERVAL.get(intensity, 90)
