@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import ceil
 from typing import Dict
 
 from .constants import (
@@ -56,3 +57,22 @@ def search_radius_km(intensity: str) -> float:
 
 def recommended_break_interval_minutes(intensity: str) -> int:
     return RECOMMENDED_COFFEE_INTERVAL.get(intensity, 90)
+
+
+def min_visit_minutes_value(intensity: str) -> float:
+    return get_intensity_profile(intensity)["min_visit_minutes"]
+
+
+def max_visit_minutes_value(intensity: str) -> float:
+    return get_intensity_profile(intensity)["max_visit_minutes"]
+
+
+def target_visit_count(hours: float, intensity: str) -> int:
+    if hours <= 0:
+        return 0
+    profile = get_intensity_profile(intensity)
+    per_hour = profile.get("target_per_hour", 1.6)
+    baseline = int(round(hours * per_hour))
+    if intensity in {"intense", "high"}:
+        baseline = max(baseline, int(ceil(hours * per_hour)))
+    return max(1, baseline)

@@ -237,7 +237,7 @@ def prioritize_candidates(
         category = item["category"]
         penalty = diversity_penalty(category, recent[-3:])
         if penalty > 0:
-            logger.debug(
+            logger.info(
                 "🚫 Diversity penalty %.1f for '%s' (recent: %s)",
                 penalty,
                 category,

@@ -33,7 +33,9 @@ from .geometry import LegEstimate, OSRMClient, haversine_km, minutes_from_distan
 from .intensity import (
     candidate_multiplier,
     effective_visit_minutes,
+    min_visit_minutes_value,
     safety_buffer_minutes,
+    target_visit_count,
     transition_padding,
 )
 from .models import CandidateScore, WeatherSnapshot
@@ -256,6 +258,12 @@ class RoutePlanner:
             if getattr(score.poi, "category", None)
         }
 
+        if selected:
+            logger.info(
+                "Categories in ranked result (raw): %s",
+                [getattr(score.poi, "category", "unknown") or "unknown" for score in selected],
+            )
+
         details: Dict[int, object] = {}
         if categories:
             try:
@@ -308,9 +316,20 @@ class RoutePlanner:
             return [], [], [[self.start_lat, self.start_lon]]
 
         available_minutes = self._effective_minutes()
-        ordered = self._order_candidates(candidates, available_minutes)
+        target_goal = target_visit_count(self.request.hours, self.request.intensity)
+        ordered, leftovers, scheduled_minutes = self._order_candidates(
+            candidates, available_minutes, target_goal
+        )
         if not ordered:
-            raise RoutePlanningError("Не удалось уместить точки в заданное время", status_code=404)
+            raise RoutePlanningError(
+                "Не удалось уместить точки в заданное время", status_code=404
+            )
+        if leftovers:
+            logger.info(
+                "⏳ Отложено кандидатов: %s (доступно ещё %.0f мин)",
+                len(leftovers),
+                max(0.0, available_minutes - scheduled_minutes),
+            )
 
         movement_legs: List[RouteLegInstruction] = []
         route_items: List[POIInRoute] = []
@@ -425,36 +444,170 @@ class RoutePlanner:
         movement_legs = movement_legs[: len(route_items)]
 
         geometry = [[lat, lon] for lat, lon in geometry_points]
+        if route_items:
+            logger.info(
+                "🧭 Итоговый маршрут: %s",
+                [
+                    item.category or ("coffee_break" if item.is_coffee_break else "unknown")
+                    for item in route_items
+                ],
+            )
         return route_items, movement_legs, geometry
 
     def _order_candidates(
-        self, candidates: List[PlannedCandidate], available_minutes: float
-    ) -> List[PlannedCandidate]:
+        self,
+        candidates: List[PlannedCandidate],
+        available_minutes: float,
+        target_goal: int,
+    ) -> Tuple[List[PlannedCandidate], List[PlannedCandidate], float]:
         from .geometry import optimize_sequence
+
+        if not candidates:
+            return [], [], 0.0
+
+        intensity = self.request.intensity
+        pad = transition_padding(intensity)
+        min_visit = float(min_visit_minutes_value(intensity))
 
         points = [(c.lat, c.lon) for c in candidates]
         order_indices = optimize_sequence((self.start_lat, self.start_lon), points)
         ordered_candidates = [candidates[idx] for idx in order_indices]
 
         selected: List[PlannedCandidate] = []
+        skipped: List[PlannedCandidate] = []
         total_minutes = 0.0
         current_lat, current_lon = self.start_lat, self.start_lon
-        pad = transition_padding(self.request.intensity)
 
-        for candidate in ordered_candidates:
+        def try_add(candidate: PlannedCandidate, *, allow_overflow: bool) -> bool:
+            nonlocal total_minutes, current_lat, current_lon
+
             distance = haversine_km(current_lat, current_lon, candidate.lat, candidate.lon)
             travel_minutes = minutes_from_distance(distance)
-            visit_minutes = candidate.effective_visit_minutes + pad
-            prospective_total = total_minutes + travel_minutes + visit_minutes
-            if prospective_total > available_minutes and selected:
-                break
-            total_minutes = prospective_total
-            selected.append(candidate)
-            current_lat, current_lon = candidate.lat, candidate.lon
+            available_remaining = available_minutes - total_minutes
+            if available_remaining < 0:
+                available_remaining = 0.0
+
+            visit_minutes = float(candidate.effective_visit_minutes)
+            incremental = travel_minutes + visit_minutes + pad
+
+            if incremental <= available_remaining:
+                selected.append(candidate)
+                total_minutes += incremental
+                current_lat, current_lon = candidate.lat, candidate.lon
+                return True
+
+            remaining_after_travel = available_remaining - travel_minutes - pad
+            if remaining_after_travel >= min_visit:
+                trimmed_visit = min(visit_minutes, remaining_after_travel)
+                candidate.effective_visit_minutes = int(round(trimmed_visit))
+                visit_minutes = float(candidate.effective_visit_minutes)
+                incremental = travel_minutes + visit_minutes + pad
+                if incremental <= max(available_minutes - total_minutes, 0.0):
+                    selected.append(candidate)
+                    total_minutes += incremental
+                    current_lat, current_lon = candidate.lat, candidate.lon
+                    return True
+
+            if allow_overflow and total_minutes + incremental <= available_minutes * 1.08:
+                selected.append(candidate)
+                total_minutes += incremental
+                current_lat, current_lon = candidate.lat, candidate.lon
+                return True
+
+            return False
+
+        for candidate in ordered_candidates:
+            allow_overflow = not selected or len(selected) < target_goal
+            if try_add(candidate, allow_overflow=allow_overflow):
+                continue
+            skipped.append(candidate)
 
         if not selected and ordered_candidates:
-            selected.append(ordered_candidates[0])
-        return selected
+            first_candidate = ordered_candidates[0]
+            try_add(first_candidate, allow_overflow=True)
+            if first_candidate in skipped:
+                skipped.remove(first_candidate)
+
+        # attempt to reuse skipped candidates while time remains
+        added = True
+        while skipped and added and total_minutes < available_minutes * 0.98:
+            added = False
+            for idx, candidate in enumerate(list(skipped)):
+                allow_overflow = len(selected) < target_goal
+                if try_add(candidate, allow_overflow=allow_overflow):
+                    skipped.pop(idx)
+                    added = True
+                    break
+
+        if skipped and len(selected) < target_goal:
+            for idx, candidate in enumerate(list(skipped)):
+                if try_add(candidate, allow_overflow=True):
+                    skipped.pop(idx)
+                if len(selected) >= target_goal:
+                    break
+
+        balanced = self._rebalance_categories(selected)
+        total_minutes, _ = self._sequence_usage(balanced)
+
+        while balanced and total_minutes > available_minutes * 1.08:
+            skipped.insert(0, balanced.pop())
+            total_minutes, _ = self._sequence_usage(balanced)
+
+        if balanced:
+            logger.info(
+                "Categories in ranked result: %s",
+                [candidate.category or "unknown" for candidate in balanced],
+            )
+            logger.info(
+                "⏱️ Планируем %s точек: %.0f мин из %.0f доступных (цель %s)",
+                len(balanced),
+                total_minutes,
+                available_minutes,
+                target_goal,
+            )
+
+        return balanced, skipped, total_minutes
+
+    def _rebalance_categories(
+        self, sequence: Sequence[PlannedCandidate]
+    ) -> List[PlannedCandidate]:
+        if len(sequence) < 2:
+            return list(sequence)
+
+        balanced = list(sequence)
+        for idx in range(1, len(balanced)):
+            prev_category = balanced[idx - 1].category or "unknown"
+            current_category = balanced[idx].category or "unknown"
+            if prev_category == current_category:
+                swap_idx = None
+                for candidate_index in range(idx + 1, len(balanced)):
+                    candidate_category = balanced[candidate_index].category or "unknown"
+                    if candidate_category != prev_category:
+                        swap_idx = candidate_index
+                        break
+                if swap_idx is not None:
+                    balanced[idx], balanced[swap_idx] = balanced[swap_idx], balanced[idx]
+        return balanced
+
+    def _sequence_usage(
+        self, sequence: Sequence[PlannedCandidate]
+    ) -> Tuple[float, float]:
+        if not sequence:
+            return 0.0, 0.0
+
+        pad = transition_padding(self.request.intensity)
+        total_minutes = 0.0
+        total_distance = 0.0
+        current_lat, current_lon = self.start_lat, self.start_lon
+
+        for candidate in sequence:
+            distance = haversine_km(current_lat, current_lon, candidate.lat, candidate.lon)
+            travel_minutes = minutes_from_distance(distance)
+            total_minutes += travel_minutes + float(candidate.effective_visit_minutes) + pad
+            total_distance += distance
+            current_lat, current_lon = candidate.lat, candidate.lon
+
+        return total_minutes, total_distance
 
     def _effective_minutes(self) -> float:
         total_minutes = float(self.request.hours * 60)
