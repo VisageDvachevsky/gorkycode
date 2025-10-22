@@ -20,6 +20,10 @@
   }
 }
 
+.leaflet-attribution-flag {
+  display: none !important;
+}
+
 @layer utilities {
   
   @keyframes gradient {
