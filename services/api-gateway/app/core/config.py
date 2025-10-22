@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings
 
 
@@ -10,6 +12,10 @@ class Settings(BaseSettings):
     LLM_SERVICE_URL: str = "llm-service:50054"
     GEOCODING_SERVICE_URL: str = "geocoding-service:50055"
     POI_SERVICE_URL: str = "poi-service:50056"
+    OSRM_BASE_URL: str = "http://osrm:5000"
+    TWOGIS_API_KEY: str | None = None
+    TWOGIS_LOCALE: str = "ru_RU"
+    ELEVATION_SERVICE_URL: str | None = "https://api.open-elevation.com/api/v1/lookup"
     REDIS_URL: str = "redis://redis:6379/0"
     SHARE_TTL_SECONDS: int = 60 * 60 * 24 * 14
     

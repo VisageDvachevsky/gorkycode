@@ -391,6 +391,7 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
                         "summary",
                         "explanations",
                         "atmospheric_description",
+                        "notes",
                     ],
                     "additionalProperties": False,
                     "properties": {
