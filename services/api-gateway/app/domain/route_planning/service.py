@@ -612,11 +612,15 @@ class RoutePlanner:
         else:
             balanced = []
 
-        total_minutes, _ = self._sequence_usage(balanced)
+        total_minutes, _, dropped = self._sequence_usage(balanced, drop_unavailable=True)
+        if dropped:
+            skipped.extend(dropped)
 
         while balanced and total_minutes > available_minutes * 1.08:
             skipped.insert(0, balanced.pop())
-            total_minutes, _ = self._sequence_usage(balanced)
+            total_minutes, _, dropped = self._sequence_usage(balanced, drop_unavailable=True)
+            if dropped:
+                skipped.extend(dropped)
 
         if balanced:
             logger.info(
@@ -634,17 +638,23 @@ class RoutePlanner:
         return balanced, skipped, total_minutes
 
     def _sequence_usage(
-        self, sequence: Sequence[PlannedCandidate]
-    ) -> Tuple[float, float]:
+        self,
+        sequence: List[PlannedCandidate],
+        *,
+        drop_unavailable: bool = False,
+    ) -> Tuple[float, float, List[PlannedCandidate]]:
         if not sequence:
-            return 0.0, 0.0
+            return 0.0, 0.0, []
 
         pad = transition_padding(self.request.intensity)
         total_minutes = 0.0
         total_distance = 0.0
         current_lat, current_lon = self.start_lat, self.start_lon
+        removed: List[PlannedCandidate] = []
 
-        for candidate in sequence:
+        idx = 0
+        while idx < len(sequence):
+            candidate = sequence[idx]
             distance = haversine_km(current_lat, current_lon, candidate.lat, candidate.lon)
             travel_minutes = minutes_from_distance(distance)
             arrival_time = self.start_time + timedelta(minutes=total_minutes + travel_minutes)
@@ -653,13 +663,23 @@ class RoutePlanner:
                 arrival_time,
                 max_wait_minutes=int(MAX_WAIT_MINUTES),
             )
-            wait_value = float(wait_minutes if can_visit else 0.0)
-            candidate.scheduled_wait_minutes = wait_value
+            if not can_visit:
+                candidate.scheduled_wait_minutes = 0.0
+                if drop_unavailable:
+                    removed_candidate = sequence.pop(idx)
+                    removed_candidate.scheduled_wait_minutes = 0.0
+                    removed.append(removed_candidate)
+                    continue
+                wait_value = 0.0
+            else:
+                wait_value = float(wait_minutes)
+                candidate.scheduled_wait_minutes = wait_value
             total_minutes += travel_minutes + wait_value + float(candidate.effective_visit_minutes) + pad
             total_distance += distance
             current_lat, current_lon = candidate.lat, candidate.lon
+            idx += 1
 
-        return total_minutes, total_distance
+        return total_minutes, total_distance, removed
 
     def _effective_minutes(self) -> float:
         total_minutes = float(self.request.hours * 60)
