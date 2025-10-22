@@ -30,7 +30,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
 
     INTENSITY_PROFILES: Dict[str, Dict[str, float]] = {
         "relaxed": {
-            "target_per_hour": 1.1,
+            "target_per_hour": 1.3,
             "default_visit_minutes": 55.0,
             "min_visit_minutes": 40.0,
             "max_visit_minutes": 90.0,
@@ -38,7 +38,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             "safety_buffer": 20.0,
         },
         "medium": {
-            "target_per_hour": 1.6,
+            "target_per_hour": 2.0,
             "default_visit_minutes": 42.0,
             "min_visit_minutes": 30.0,
             "max_visit_minutes": 70.0,
@@ -46,7 +46,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             "safety_buffer": 15.0,
         },
         "intense": {
-            "target_per_hour": 2.3,
+            "target_per_hour": 2.8,
             "default_visit_minutes": 30.0,
             "min_visit_minutes": 20.0,
             "max_visit_minutes": 55.0,
@@ -216,7 +216,8 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         budget = max(0.0, available_minutes - safety)
 
         pool_size = min(len(pois), max(target_count + 3, 6))
-        pool_size = min(pool_size, 10)
+        pool_size = min(pool_size, 25)
+        logger.info("🎯 TSP solver will process up to %s POIs", pool_size)
         candidate_pool = list(range(pool_size))
 
         fallback: Optional[Tuple[List[int], float, float]] = None
@@ -271,6 +272,13 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             start_point: CoordinateTuple = (request.start_lat, request.start_lon)
             available_minutes = request.available_hours * 60
             intensity = (request.intensity or "medium").lower()
+
+            logger.info(
+                "🎯 optimize_route: received %s candidates, hours=%.1f, intensity=%s",
+                len(pois),
+                request.available_hours,
+                intensity,
+            )
 
             filtered_pois = self._filter_dense_pois(pois, intensity)
             if len(filtered_pois) < len(pois):
@@ -327,8 +335,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             planned_minutes = totals["total_duration"]
 
             logger.info(
-                "✓ Optimised route (%s): %s/%s POIs, %.2f km, est %.0f min (budget %.0f)",
-                intensity,
+                "✅ optimize_route result: %s POIs selected (target %s), distance=%.2fkm, time=%.0fmin (budget %.0f)",
                 len(ordered_route),
                 target_count,
                 totals["total_distance"],
