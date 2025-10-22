@@ -75,7 +75,7 @@ class Cafe(_message.Message):
     def __init__(self, id: _Optional[str] = ..., name: _Optional[str] = ..., lat: _Optional[float] = ..., lon: _Optional[float] = ..., address: _Optional[str] = ..., rubrics: _Optional[_Iterable[str]] = ..., distance: _Optional[float] = ...) -> None: ...
 
 class POI(_message.Message):
-    __slots__ = ("id", "name", "lat", "lon", "category", "tags", "description", "avg_visit_minutes", "rating", "embedding", "local_tip", "photo_tip", "address", "social_mode", "intensity_level")
+    __slots__ = ("id", "name", "lat", "lon", "category", "tags", "description", "avg_visit_minutes", "rating", "embedding", "local_tip", "photo_tip", "address", "social_mode", "intensity_level", "open_time", "close_time")
     ID_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     LAT_FIELD_NUMBER: _ClassVar[int]
@@ -91,6 +91,8 @@ class POI(_message.Message):
     ADDRESS_FIELD_NUMBER: _ClassVar[int]
     SOCIAL_MODE_FIELD_NUMBER: _ClassVar[int]
     INTENSITY_LEVEL_FIELD_NUMBER: _ClassVar[int]
+    OPEN_TIME_FIELD_NUMBER: _ClassVar[int]
+    CLOSE_TIME_FIELD_NUMBER: _ClassVar[int]
     id: int
     name: str
     lat: float
@@ -106,4 +108,6 @@ class POI(_message.Message):
     address: str
     social_mode: str
     intensity_level: str
-    def __init__(self, id: _Optional[int] = ..., name: _Optional[str] = ..., lat: _Optional[float] = ..., lon: _Optional[float] = ..., category: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., avg_visit_minutes: _Optional[int] = ..., rating: _Optional[float] = ..., embedding: _Optional[_Iterable[float]] = ..., local_tip: _Optional[str] = ..., photo_tip: _Optional[str] = ..., address: _Optional[str] = ..., social_mode: _Optional[str] = ..., intensity_level: _Optional[str] = ...) -> None: ...
+    open_time: str
+    close_time: str
+    def __init__(self, id: _Optional[int] = ..., name: _Optional[str] = ..., lat: _Optional[float] = ..., lon: _Optional[float] = ..., category: _Optional[str] = ..., tags: _Optional[_Iterable[str]] = ..., description: _Optional[str] = ..., avg_visit_minutes: _Optional[int] = ..., rating: _Optional[float] = ..., embedding: _Optional[_Iterable[float]] = ..., local_tip: _Optional[str] = ..., photo_tip: _Optional[str] = ..., address: _Optional[str] = ..., social_mode: _Optional[str] = ..., intensity_level: _Optional[str] = ..., open_time: _Optional[str] = ..., close_time: _Optional[str] = ...) -> None: ...

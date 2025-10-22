@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react'
@@ -28,8 +28,6 @@ const STEPS = [
   { id: 'preferences', title: 'Настройки', icon: '🎛️' },
   { id: 'review', title: 'Готово', icon: '🎯' },
 ] as const
-
-type StepId = typeof STEPS[number]['id']
 
 export default function RouteWizard({ onRouteGenerated, onBack }: Props) {
   const [currentStep, setCurrentStep] = useState<number>(0)

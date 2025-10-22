@@ -54,6 +54,19 @@ const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast, onHover }: Poi
                 </span>
                 <span>•</span>
                 <span>{poi.est_visit_minutes} минут</span>
+                {poi.opening_hours && (
+                  <>
+                    <span>•</span>
+                    <span
+                      className={`flex items-center gap-1 ${
+                        poi.is_open ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'
+                      }`}
+                    >
+                      {poi.is_open ? 'Открыто' : 'График'}
+                      <span className="font-medium text-xs">{poi.opening_hours}</span>
+                    </span>
+                  </>
+                )}
                 {poi.is_coffee_break && (
                   <>
                     <span>•</span>
@@ -63,6 +76,11 @@ const PoiCard = ({ poi, isExpanded, onToggle, formatTime, isLast, onHover }: Poi
                   </>
                 )}
               </div>
+              {poi.availability_note && (
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">
+                  {poi.availability_note}
+                </p>
+              )}
             </div>
             {isExpanded ? (
               <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />

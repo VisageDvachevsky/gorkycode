@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import { api } from '../api/client'
-import type { RouteRequest, RouteResponse, Category, CoffeePreferences } from '../types'
+import type { RouteRequest, RouteResponse, CoffeePreferences } from '../types'
 import {
   DEFAULT_ROUTE_HOURS,
   MAX_ROUTE_HOURS,

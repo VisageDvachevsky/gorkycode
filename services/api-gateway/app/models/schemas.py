@@ -82,6 +82,7 @@ class POIInRoute(BaseModel):
     is_coffee_break: bool = False
     is_open: Optional[bool] = None
     opening_hours: Optional[str] = None
+    availability_note: Optional[str] = None
     category: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     emoji: Optional[str] = None

@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, time as dt_time
 from math import atan2, cos, radians, sin, sqrt
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -24,6 +25,7 @@ from app.models.schemas import (
     TransitStopInfo,
 )
 from app.proto import llm_pb2, route_pb2
+from app.services.time_scheduler import time_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +119,51 @@ EMOJI_BY_CATEGORY: Dict[str, str] = {
     "park": "🌳",
 }
 
+TYPICAL_OPENING_HOURS: Dict[str, Tuple[dt_time, dt_time]] = {
+    "museum": (dt_time(10, 0), dt_time(19, 0)),
+    "art_object": (dt_time(9, 0), dt_time(21, 0)),
+    "architecture": (dt_time(9, 0), dt_time(22, 0)),
+    "religious_site": (dt_time(8, 0), dt_time(20, 0)),
+    "park": (dt_time(0, 0), dt_time(23, 59)),
+    "memorial": (dt_time(0, 0), dt_time(23, 59)),
+    "monument": (dt_time(0, 0), dt_time(23, 59)),
+    "viewpoint": (dt_time(9, 0), dt_time(22, 0)),
+    "embankment": (dt_time(0, 0), dt_time(23, 59)),
+    "cafe": (dt_time(8, 0), dt_time(23, 0)),
+    "bar": (dt_time(12, 0), dt_time(2, 0)),
+    "sculpture": (dt_time(9, 0), dt_time(22, 0)),
+    "default": (dt_time(9, 0), dt_time(21, 0)),
+}
+
+
+@dataclass(frozen=True)
+class _POIMetadata:
+    keywords: Tuple[str, ...]
+    category: str
+    tags: Tuple[str, ...]
+
+
+def _build_poi_metadata(poi) -> _POIMetadata:
+    raw_tags = getattr(poi, "tags", []) or []
+    normalized_tags = tuple(_normalize(tag) for tag in raw_tags if tag)
+    normalized_name = _normalize(getattr(poi, "name", ""))
+    keywords = tuple(value for value in (normalized_name, *normalized_tags) if value)
+    category = _normalize(getattr(poi, "category", ""))
+    return _POIMetadata(keywords=keywords, category=category, tags=normalized_tags)
+
+
+def _resolve_start_reference(
+    start_time: Optional[datetime], start_hour: Optional[int]
+) -> Tuple[datetime, int]:
+    reference = start_time or datetime.now()
+    if start_hour is not None:
+        normalized_hour = int(start_hour) % 24
+        reference = reference.replace(
+            hour=normalized_hour, minute=0, second=0, microsecond=0
+        )
+        return reference, normalized_hour
+    return reference, reference.hour
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius = 6371.0
@@ -169,78 +216,220 @@ def _normalize(text: Optional[str]) -> str:
     return (text or "").lower()
 
 
-def _contains_keywords(values: Iterable[str], keywords: Sequence[str]) -> bool:
-    lowered = [_normalize(value) for value in values if value]
-    for value in lowered:
+def _contains_keywords(
+    values: Iterable[str],
+    keywords: Sequence[str],
+    *,
+    pre_normalized: bool = False,
+) -> bool:
+    candidates = [value for value in values if value]
+    if not pre_normalized:
+        candidates = [_normalize(value) for value in candidates]
+    for value in candidates:
         for keyword in keywords:
             if keyword in value:
                 return True
     return False
 
 
-def _apply_time_window_filters(pois: Sequence, start_hour: int) -> List:
+def _parse_time_string(value: Optional[str]) -> Optional[dt_time]:
+    if not value:
+        return None
+    value = value.strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _resolve_schedule_window(
+    category: Optional[str], open_time: Optional[str], close_time: Optional[str]
+) -> Tuple[dt_time, dt_time, bool, bool]:
+    normalized = (category or "").lower().strip()
+    normalized = normalized.replace(" ", "_")
+    fallback = TYPICAL_OPENING_HOURS.get(
+        normalized, TYPICAL_OPENING_HOURS["default"]
+    )
+
+    parsed_open = _parse_time_string(open_time)
+    parsed_close = _parse_time_string(close_time)
+    precise = bool(open_time or close_time)
+
+    open_dt = parsed_open or fallback[0]
+    close_dt = parsed_close or fallback[1]
+    wraps = (close_dt.hour * 60 + close_dt.minute) <= (open_dt.hour * 60 + open_dt.minute)
+    return open_dt, close_dt, precise, wraps
+
+
+def _format_opening_label(
+    open_time: dt_time, close_time: dt_time, wraps: bool, precise: bool
+) -> str:
+    open_label = open_time.strftime("%H:%M")
+    close_label = close_time.strftime("%H:%M")
+    wrap_suffix = " (+1 день)" if wraps else ""
+    precision_suffix = " (точное)" if precise else " (ориентировочно)"
+    return f"{open_label}–{close_label}{wrap_suffix}{precision_suffix}"
+
+
+def _availability_score_for_start(poi, start_time: datetime) -> float:
+    open_dt, close_dt, precise, wraps = _resolve_schedule_window(
+        getattr(poi, "category", None),
+        getattr(poi, "open_time", ""),
+        getattr(poi, "close_time", ""),
+    )
+
+    start_minutes = start_time.hour * 60 + start_time.minute
+    open_minutes = open_dt.hour * 60 + open_dt.minute
+    close_minutes = close_dt.hour * 60 + close_dt.minute
+
+    if wraps:
+        close_minutes += 24 * 60
+        if start_minutes <= close_minutes - 24 * 60:
+            start_minutes += 24 * 60
+
+    if open_minutes <= start_minutes <= close_minutes:
+        return 1.0 if precise else 0.92
+    if start_minutes < open_minutes:
+        diff = open_minutes - start_minutes
+        if diff <= 45:
+            return 0.85
+        if diff <= 120:
+            return 0.72
+        return 0.5
+
+    diff = start_minutes - close_minutes
+    if diff <= 45:
+        return 0.68
+    return 0.45
+
+
+def _align_visit_with_schedule(
+    arrival: datetime,
+    visit_minutes: float,
+    category: Optional[str],
+    open_time: Optional[str],
+    close_time: Optional[str],
+) -> Tuple[datetime, datetime, bool, str, Optional[str], float]:
+    open_dt, close_dt, precise, wraps = _resolve_schedule_window(
+        category, open_time, close_time
+    )
+
+    day_start = arrival.replace(hour=0, minute=0, second=0, microsecond=0)
+    arrival_minutes = (arrival - day_start).total_seconds() / 60.0
+    open_minutes = open_dt.hour * 60 + open_dt.minute
+    close_minutes = close_dt.hour * 60 + close_dt.minute
+
+    if wraps:
+        close_minutes += 24 * 60
+        if arrival_minutes <= close_minutes - 24 * 60:
+            arrival_minutes += 24 * 60
+
+    wait_minutes = 0.0
+    if arrival_minutes < open_minutes:
+        wait_minutes = open_minutes - arrival_minutes
+        arrival_minutes = open_minutes
+
+    visit_end_minutes = arrival_minutes + visit_minutes
+    is_open = visit_end_minutes <= close_minutes
+    if not is_open:
+        visit_end_minutes = min(visit_end_minutes, close_minutes)
+
+    visit_start_time = day_start + timedelta(minutes=arrival_minutes)
+    visit_end_time = day_start + timedelta(minutes=visit_end_minutes)
+    opening_label = _format_opening_label(open_dt, close_dt, wraps, precise)
+
+    note: Optional[str] = None
+    if wait_minutes >= 1.0:
+        note = f"Ждём открытия до {open_dt.strftime('%H:%M')}"
+    if not is_open:
+        closing_label = close_dt.strftime("%H:%M")
+        closing_note = f"Место закрывается в {closing_label} — планируйте быстрее"
+        note = f"{note}, {closing_note}" if note else closing_note
+
+    return visit_start_time, visit_end_time, is_open, opening_label, note, wait_minutes
+
+
+def _apply_time_window_filters(
+    pois: Sequence,
+    start_time: Optional[datetime] = None,
+    *,
+    start_hour: Optional[int] = None,
+) -> List:
     entries = list(pois)
     if not entries:
         return entries
 
-    filtered: List = []
-    for poi in entries:
-        name = _normalize(getattr(poi, "name", ""))
-        tags = [tag.lower() for tag in getattr(poi, "tags", [])]
-        skip = False
-        if start_hour < 9 and _contains_keywords([name, *tags], MORNING_AVOID_KEYWORDS):
-            skip = True
-        if start_hour >= 21 and _contains_keywords([name, *tags], NIGHT_UNSAFE_KEYWORDS):
-            skip = True
-        if not skip:
-            filtered.append(poi)
+    resolved_start, resolved_hour = _resolve_start_reference(start_time, start_hour)
+    metadata_entries = [(poi, _build_poi_metadata(poi)) for poi in entries]
 
-    if not filtered:
-        return entries
+    filtered_entries: List[Tuple[object, _POIMetadata]] = []
+    for poi, meta in metadata_entries:
+        if resolved_hour < 9 and _contains_keywords(
+            meta.keywords, MORNING_AVOID_KEYWORDS, pre_normalized=True
+        ):
+            continue
+        if resolved_hour >= 21 and _contains_keywords(
+            meta.keywords, NIGHT_UNSAFE_KEYWORDS, pre_normalized=True
+        ):
+            continue
+        filtered_entries.append((poi, meta))
 
-    if start_hour >= 21:
-        filtered.sort(
-            key=lambda poi: (
-                _contains_keywords(
-                    [getattr(poi, "name", "")] + list(getattr(poi, "tags", [])),
-                    NIGHT_PREFERRED_KEYWORDS,
-                ),
-                getattr(poi, "rating", 0.0),
-            ),
-            reverse=True,
-        )
+    if not filtered_entries:
+        filtered_entries = metadata_entries
 
-    return filtered
+    scored: List[Tuple[float, float, object]] = []
+    for poi, meta in filtered_entries:
+        base_score = _availability_score_for_start(poi, resolved_start)
+        preference_bonus = 0.0
+        if resolved_hour >= 21 and _contains_keywords(
+            meta.keywords, NIGHT_PREFERRED_KEYWORDS, pre_normalized=True
+        ):
+            preference_bonus = 0.08
+        rating = float(getattr(poi, "rating", 0.0) or 0.0)
+        scored.append((min(1.1, base_score + preference_bonus), rating, poi))
+
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [entry[2] for entry in scored]
+
+
+def _is_street_art_meta(meta: _POIMetadata) -> bool:
+    if meta.category in CATEGORY_STREET_ART:
+        return True
+    return _contains_keywords(meta.keywords, STREET_ART_HINTS, pre_normalized=True)
+
+
+def _is_history_meta(meta: _POIMetadata) -> bool:
+    if meta.category in CATEGORY_HISTORY:
+        return True
+    return _contains_keywords(meta.keywords, HISTORY_HINTS, pre_normalized=True)
 
 
 def _is_street_art_candidate(poi) -> bool:
-    category = _normalize(getattr(poi, "category", ""))
-    tags = [tag.lower() for tag in getattr(poi, "tags", [])]
-    if category in CATEGORY_STREET_ART:
-        return True
-    return _contains_keywords([getattr(poi, "name", ""), *tags], STREET_ART_HINTS)
+    return _is_street_art_meta(_build_poi_metadata(poi))
 
 
 def _is_history_candidate(poi) -> bool:
-    category = _normalize(getattr(poi, "category", ""))
-    tags = [tag.lower() for tag in getattr(poi, "tags", [])]
-    if category in CATEGORY_HISTORY:
-        return True
-    return _contains_keywords([getattr(poi, "name", ""), *tags], HISTORY_HINTS)
+    return _is_history_meta(_build_poi_metadata(poi))
 
 
 def _alternate_street_history_candidates(pois: Sequence) -> List:
     entries = list(pois)
-    street_items = [poi for poi in entries if _is_street_art_candidate(poi)]
-    history_items = [poi for poi in entries if _is_history_candidate(poi)]
+    metadata_entries = [(poi, _build_poi_metadata(poi)) for poi in entries]
+
+    street_items = [poi for poi, meta in metadata_entries if _is_street_art_meta(meta)]
+    history_items = [poi for poi, meta in metadata_entries if _is_history_meta(meta)]
 
     if not street_items or not history_items:
         return entries
 
+    street_ids = {id(poi) for poi in street_items}
+    history_ids = {id(poi) for poi in history_items}
     other_items = [
         poi
-        for poi in entries
-        if poi not in street_items and poi not in history_items
+        for poi, _ in metadata_entries
+        if id(poi) not in street_ids and id(poi) not in history_ids
     ]
 
     street_queue = street_items.copy()
@@ -284,12 +473,17 @@ def _needs_street_history_mix(request: RouteRequest) -> bool:
 
 
 def _emoji_for_poi(category: Optional[str], tags: Iterable[str], fallback: str = "📍") -> str:
-    category_key = (category or "").lower()
+    category_key = _normalize(category)
     if category_key in EMOJI_BY_CATEGORY:
         return EMOJI_BY_CATEGORY[category_key]
-    if _contains_keywords(tags, STREET_ART_HINTS):
+    normalized_tags = [_normalize(tag) for tag in tags if tag]
+    if _contains_keywords(
+        normalized_tags, STREET_ART_HINTS, pre_normalized=True
+    ):
         return "🎨"
-    if _contains_keywords(tags, HISTORY_HINTS):
+    if _contains_keywords(
+        normalized_tags, HISTORY_HINTS, pre_normalized=True
+    ):
         return "🏛"
     return fallback
 
@@ -614,14 +808,11 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     start_lat, start_lon, start_label = await _resolve_start_location(request)
     tz = request.resolved_timezone()
 
-    start_time = None
-    if request.start_time:
-        start_time = datetime.strptime(request.start_time, "%H:%M")
-        now = datetime.now(tz)
-        start_time = start_time.replace(year=now.year, month=now.month, day=now.day)
-        start_time = start_time.replace(tzinfo=tz)
-    else:
-        start_time = datetime.now(tz)
+    time_plan = time_scheduler.determine_start_time(
+        request.start_time, tz, request.hours
+    )
+    start_time = time_plan.start_time
+    scheduler_warnings = time_plan.warnings
 
     profile_text = _build_profile_text(request)
 
@@ -645,13 +836,14 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             intensity=_map_intensity_for_ranking(request.intensity),
             top_k=25,
             categories_filter=request.categories or [],
+            start_time_minutes=start_time.hour * 60 + start_time.minute,
         )
     except Exception as exc:
         logger.exception("Ranking service error")
         raise HTTPException(503, "Сервис ранжирования недоступен") from exc
 
     scored_pois = list(ranking_response)
-    scored_pois = _apply_time_window_filters(scored_pois, start_time.hour)
+    scored_pois = _apply_time_window_filters(scored_pois, start_time)
     if _needs_street_history_mix(request):
         scored_pois = _alternate_street_history_candidates(scored_pois)
     if not scored_pois:
@@ -746,6 +938,10 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
                 "tags": list(ranked.tags),
                 "local_tip": getattr(details, "local_tip", None),
                 "address": getattr(details, "address", ""),
+                "open_time": getattr(details, "open_time", "")
+                or getattr(ranked, "open_time", ""),
+                "close_time": getattr(details, "close_time", "")
+                or getattr(ranked, "close_time", ""),
             }
         )
 
@@ -823,6 +1019,8 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     coffee_breaks_planned = 0
     last_coffee_timestamp = initial_time
     transition_padding = _transition_padding(request.intensity)
+    visit_minutes_total = 0.0
+    total_wait_minutes = 0.0
 
     for idx, item in enumerate(ordered):
         leg_distance = None
@@ -840,16 +1038,44 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         if leg_duration is None:
             leg_duration = _minutes_from_distance(leg_distance)
 
-        if leg_duration:
-            cursor_time += timedelta(minutes=leg_duration)
+        travel_minutes = float(leg_duration or 0.0)
+        if travel_minutes:
+            cursor_time += timedelta(minutes=travel_minutes)
         total_distance_km += leg_distance
 
         explanation = explanation_map.get(item["id"])
-        visit_minutes = item.get("effective_visit_minutes") or _effective_visit_minutes(
+        planned_visit_minutes = item.get("effective_visit_minutes") or _effective_visit_minutes(
             item.get("avg_visit_minutes"), request.intensity
         )
-        visit_total = visit_minutes + transition_padding
-        leave_time = cursor_time + timedelta(minutes=visit_total)
+
+        (
+            visit_start,
+            visit_end,
+            is_open,
+            opening_label,
+            availability_note,
+            wait_minutes,
+        ) = _align_visit_with_schedule(
+            cursor_time,
+            planned_visit_minutes,
+            item.get("category"),
+            item.get("open_time"),
+            item.get("close_time"),
+        )
+
+        actual_visit_minutes = max(
+            0.0, (visit_end - visit_start).total_seconds() / 60.0
+        )
+        display_visit_minutes = (
+            int(round(actual_visit_minutes))
+            if actual_visit_minutes >= 5.0
+            else int(round(planned_visit_minutes))
+        )
+
+        total_wait_minutes += wait_minutes
+        visit_minutes_total += actual_visit_minutes
+
+        leave_time = visit_end + timedelta(minutes=transition_padding)
 
         route_items.append(
             POIInRoute(
@@ -868,10 +1094,13 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
                     if explanation and explanation.tip
                     else (item.get("local_tip") or "")
                 ),
-                est_visit_minutes=int(visit_minutes),
-                arrival_time=cursor_time,
+                est_visit_minutes=display_visit_minutes,
+                arrival_time=visit_start,
                 leave_time=leave_time,
                 is_coffee_break=False,
+                is_open=is_open,
+                opening_hours=opening_label,
+                availability_note=availability_note,
                 category=item.get("category"),
                 tags=item.get("tags", []),
                 emoji=_emoji_for_poi(item.get("category"), item.get("tags", [])),
@@ -957,9 +1186,15 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
     )
 
     notes: List[str] = [f"Старт: {start_label}"]
+    if scheduler_warnings:
+        notes.extend(scheduler_warnings)
     if safety_buffer > 0:
         notes.append(
             f"Заложен буфер {int(round(safety_buffer))} мин на ориентирование и переходы"
+        )
+    if visit_minutes_total >= 1.0:
+        notes.append(
+            f"На посещение точек — около {int(round(visit_minutes_total))} мин чистого времени"
         )
     if coffee_breaks_planned:
         if coffee_breaks_planned == 1:
@@ -968,12 +1203,16 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
             notes.append(
                 f"Запланированы {coffee_breaks_planned} кофейные паузы по вашим предпочтениям"
             )
+    if total_wait_minutes >= 1.0:
+        notes.append(
+            f"Учтём ожидание открытия площадок: около {int(round(total_wait_minutes))} мин"
+        )
     notes.extend(notes_from_llm)
     if weather_advice:
         notes.append(weather_advice)
 
     time_limit_minutes = int(request.hours * 60)
-    warnings: List[str] = []
+    warnings: List[str] = list(scheduler_warnings)
     if total_est_minutes > time_limit_minutes:
         warnings.append(
             "Маршрут получился чуть длиннее указанного времени — скорректируйте длительность или интересы."

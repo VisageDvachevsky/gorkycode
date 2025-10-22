@@ -125,14 +125,19 @@ class RankingClient(GrpcClient[ranking_pb2_grpc.RankingServiceStub]):
         intensity: str,
         top_k: int = 20,
         categories_filter: Optional[List[str]] = None,
+        start_time_minutes: Optional[int] = None,
     ):
-        request = ranking_pb2.RankingRequest(
-            user_embedding=user_embedding,
-            social_mode=social_mode,
-            intensity=intensity,
-            top_k=top_k,
-            categories_filter=categories_filter or [],
-        )
+        request_kwargs = {
+            "user_embedding": user_embedding,
+            "social_mode": social_mode,
+            "intensity": intensity,
+            "top_k": top_k,
+            "categories_filter": categories_filter or [],
+        }
+        if start_time_minutes is not None:
+            request_kwargs["start_time_minutes"] = start_time_minutes
+
+        request = ranking_pb2.RankingRequest(**request_kwargs)
         response = await self.stub().RankPOIs(request, metadata=self._metadata())
         return response.scored_pois
 
