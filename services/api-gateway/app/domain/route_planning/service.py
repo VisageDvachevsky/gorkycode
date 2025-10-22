@@ -44,8 +44,10 @@ from .intensity import (
     target_visit_count,
     transition_padding,
 )
+from .diversity import enforce_category_diversity
 from .models import CandidateScore, WeatherSnapshot
-from .schedule import align_visit_with_schedule
+from .optimization import optimize_poi_sequence
+from .schedule import align_visit_with_schedule, is_open_at
 from .scoring import (
     alternate_street_history_candidates,
     apply_time_window_filters,
@@ -59,6 +61,8 @@ from .time_phase import resolve_time_phase
 from .weather import load_weather_snapshot
 
 logger = logging.getLogger(__name__)
+
+MAX_WAIT_MINUTES = 45.0
 
 
 @dataclass
@@ -77,6 +81,8 @@ class PlannedCandidate:
     address: Optional[str]
     open_time: Optional[str]
     close_time: Optional[str]
+    opening_hours: Optional[str]
+    scheduled_wait_minutes: float
     selection_score: Optional[float]
     selection_penalty: Optional[float]
     selection_contextual: Optional[float]
@@ -293,6 +299,11 @@ class RoutePlanner:
             detail = details.get(poi_id)
             base_visit = getattr(poi, "avg_visit_minutes", None) or 0
             effective_visit = effective_visit_minutes(base_visit or None, self.request.intensity)
+            opening_hours_value = None
+            if detail is not None:
+                opening_hours_value = getattr(detail, "opening_hours", None)
+            if not opening_hours_value:
+                opening_hours_value = getattr(poi, "opening_hours", None)
             planned.append(
                 PlannedCandidate(
                     id=poi_id,
@@ -309,6 +320,8 @@ class RoutePlanner:
                     address=getattr(detail, "address", None),
                     open_time=getattr(detail, "open_time", None) or getattr(poi, "open_time", None),
                     close_time=getattr(detail, "close_time", None) or getattr(poi, "close_time", None),
+                    opening_hours=opening_hours_value,
+                    scheduled_wait_minutes=0.0,
                     selection_score=score.final_score,
                     selection_penalty=score.penalty,
                     selection_contextual=score.contextual,
@@ -470,8 +483,6 @@ class RoutePlanner:
         available_minutes: float,
         target_goal: int,
     ) -> Tuple[List[PlannedCandidate], List[PlannedCandidate], float]:
-        from .geometry import optimize_sequence
-
         if not candidates:
             return [], [], 0.0
 
@@ -479,9 +490,15 @@ class RoutePlanner:
         pad = transition_padding(intensity)
         min_visit = float(min_visit_minutes_value(intensity))
 
-        points = [(c.lat, c.lon) for c in candidates]
-        order_indices = optimize_sequence((self.start_lat, self.start_lon), points)
-        ordered_candidates = [candidates[idx] for idx in order_indices]
+        for candidate in candidates:
+            candidate.scheduled_wait_minutes = 0.0
+
+        diversified = enforce_category_diversity(candidates, max_consecutive=2)
+        ordered_candidates = optimize_poi_sequence(
+            diversified,
+            start_lat=self.start_lat,
+            start_lon=self.start_lon,
+        )
 
         selected: List[PlannedCandidate] = []
         skipped: List[PlannedCandidate] = []
@@ -491,39 +508,68 @@ class RoutePlanner:
         def try_add(candidate: PlannedCandidate, *, allow_overflow: bool) -> bool:
             nonlocal total_minutes, current_lat, current_lon
 
+            original_visit = candidate.effective_visit_minutes
+            original_wait = candidate.scheduled_wait_minutes
+
             distance = haversine_km(current_lat, current_lon, candidate.lat, candidate.lon)
             travel_minutes = minutes_from_distance(distance)
             available_remaining = available_minutes - total_minutes
             if available_remaining < 0:
                 available_remaining = 0.0
 
-            visit_minutes = float(candidate.effective_visit_minutes)
-            incremental = travel_minutes + visit_minutes + pad
+            arrival_time = self.start_time + timedelta(minutes=total_minutes + travel_minutes)
+            can_visit, wait_minutes = is_open_at(
+                candidate,
+                arrival_time,
+                max_wait_minutes=int(MAX_WAIT_MINUTES),
+            )
+            if not can_visit:
+                candidate.effective_visit_minutes = original_visit
+                candidate.scheduled_wait_minutes = original_wait
+                return False
 
-            if incremental <= available_remaining:
+            wait_minutes = float(wait_minutes)
+            visit_minutes = float(candidate.effective_visit_minutes)
+
+            incremental_full = travel_minutes + wait_minutes + visit_minutes + pad
+
+            if incremental_full <= available_remaining:
+                candidate.scheduled_wait_minutes = wait_minutes
                 selected.append(candidate)
-                total_minutes += incremental
+                total_minutes += incremental_full
                 current_lat, current_lon = candidate.lat, candidate.lon
                 return True
 
-            remaining_after_travel = available_remaining - travel_minutes - pad
+            trimmed_incremental: Optional[float] = None
+            trimmed_visit_value: Optional[float] = None
+
+            remaining_after_travel = available_remaining - travel_minutes - wait_minutes - pad
             if remaining_after_travel >= min_visit:
-                trimmed_visit = min(visit_minutes, remaining_after_travel)
-                candidate.effective_visit_minutes = int(round(trimmed_visit))
-                visit_minutes = float(candidate.effective_visit_minutes)
-                incremental = travel_minutes + visit_minutes + pad
-                if incremental <= max(available_minutes - total_minutes, 0.0):
+                trimmed_visit_value = min(visit_minutes, remaining_after_travel)
+                trimmed_incremental = travel_minutes + wait_minutes + float(trimmed_visit_value) + pad
+                limit = max(available_minutes - total_minutes, 0.0)
+                if trimmed_incremental <= limit:
+                    candidate.effective_visit_minutes = int(round(trimmed_visit_value))
+                    candidate.scheduled_wait_minutes = wait_minutes
                     selected.append(candidate)
-                    total_minutes += incremental
+                    total_minutes += trimmed_incremental
                     current_lat, current_lon = candidate.lat, candidate.lon
                     return True
 
-            if allow_overflow and total_minutes + incremental <= available_minutes * 1.08:
+            overflow_incremental = trimmed_incremental or incremental_full
+            if allow_overflow and total_minutes + overflow_incremental <= available_minutes * 1.08:
+                if trimmed_incremental is not None and trimmed_visit_value is not None:
+                    candidate.effective_visit_minutes = int(round(trimmed_visit_value))
+                else:
+                    candidate.effective_visit_minutes = original_visit
+                candidate.scheduled_wait_minutes = wait_minutes
                 selected.append(candidate)
-                total_minutes += incremental
+                total_minutes += overflow_incremental
                 current_lat, current_lon = candidate.lat, candidate.lon
                 return True
 
+            candidate.effective_visit_minutes = original_visit
+            candidate.scheduled_wait_minutes = original_wait
             return False
 
         for candidate in ordered_candidates:
@@ -556,7 +602,16 @@ class RoutePlanner:
                 if len(selected) >= target_goal:
                     break
 
-        balanced = self._rebalance_categories(selected)
+        if selected:
+            balanced_seed = enforce_category_diversity(selected, max_consecutive=2)
+            balanced = optimize_poi_sequence(
+                balanced_seed,
+                start_lat=self.start_lat,
+                start_lon=self.start_lon,
+            )
+        else:
+            balanced = []
+
         total_minutes, _ = self._sequence_usage(balanced)
 
         while balanced and total_minutes > available_minutes * 1.08:
@@ -578,27 +633,6 @@ class RoutePlanner:
 
         return balanced, skipped, total_minutes
 
-    def _rebalance_categories(
-        self, sequence: Sequence[PlannedCandidate]
-    ) -> List[PlannedCandidate]:
-        if len(sequence) < 2:
-            return list(sequence)
-
-        balanced = list(sequence)
-        for idx in range(1, len(balanced)):
-            prev_category = balanced[idx - 1].category or "unknown"
-            current_category = balanced[idx].category or "unknown"
-            if prev_category == current_category:
-                swap_idx = None
-                for candidate_index in range(idx + 1, len(balanced)):
-                    candidate_category = balanced[candidate_index].category or "unknown"
-                    if candidate_category != prev_category:
-                        swap_idx = candidate_index
-                        break
-                if swap_idx is not None:
-                    balanced[idx], balanced[swap_idx] = balanced[swap_idx], balanced[idx]
-        return balanced
-
     def _sequence_usage(
         self, sequence: Sequence[PlannedCandidate]
     ) -> Tuple[float, float]:
@@ -613,7 +647,15 @@ class RoutePlanner:
         for candidate in sequence:
             distance = haversine_km(current_lat, current_lon, candidate.lat, candidate.lon)
             travel_minutes = minutes_from_distance(distance)
-            total_minutes += travel_minutes + float(candidate.effective_visit_minutes) + pad
+            arrival_time = self.start_time + timedelta(minutes=total_minutes + travel_minutes)
+            can_visit, wait_minutes = is_open_at(
+                candidate,
+                arrival_time,
+                max_wait_minutes=int(MAX_WAIT_MINUTES),
+            )
+            wait_value = float(wait_minutes if can_visit else 0.0)
+            candidate.scheduled_wait_minutes = wait_value
+            total_minutes += travel_minutes + wait_value + float(candidate.effective_visit_minutes) + pad
             total_distance += distance
             current_lat, current_lon = candidate.lat, candidate.lon
 
