@@ -187,9 +187,10 @@ gorkycode/
 ```bash
 cp .env.example .env
 # укажите ключи в .env (OpenAI/Anthropic, 2GIS, настройки БД)
-./scripts/env-to-yaml.sh   # конвертирует .env в helm/values-secret.yaml и .env.yaml
+./scripts/env-to-yaml.sh   # конвертирует .env в helm/values.yaml и .env.yaml
+.scripts/validate-env-yaml.sh # валилирует secrets.yaml 
 ```
-Скрипт создаст файл `helm/ai-tourist/values-secret.yaml`, который Helm подключает как Kubernetes Secret.
+Скрипт создаст файл `helm/ai-tourist/values.yaml`, который Helm подключает как Kubernetes Secret.
 
 ### 2. Запустить Minikube с нужными ресурсами
 ```bash
