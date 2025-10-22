@@ -151,12 +151,29 @@ class TwoGISClient:
 
         request_body = {
             "points": [
-                {"type": "stop", "lat": start[0], "lon": start[1]},
-                {"type": "stop", "lat": end[0], "lon": end[1]},
+                {
+                    "type": "stop",
+                    "point": {"lat": start[0], "lon": start[1]},
+                },
+                {
+                    "type": "stop",
+                    "point": {"lat": end[0], "lon": end[1]},
+                },
             ],
-            "transport": "public_transport",
+            "transport": {
+                "type": "public_transport",
+                "route_search": {
+                    "max_transfers": 2,
+                    "avoid": [],
+                },
+            },
             "route_mode": "fastest",
             "output": "detailed",
+        }
+
+        params = {
+            "locale": "ru_RU",
+            "route_locale": "ru_RU",
         }
 
         data = await self._request_post(
