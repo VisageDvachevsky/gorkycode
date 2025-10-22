@@ -24,19 +24,19 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rranking.proto\x12\x07ranking\"z\n\x0eRankingRequest\x12\x16\n\x0euser_embedding\x18\x01 \x03(\x02\x12\x13\n\x0bsocial_mode\x18\x02 \x01(\t\x12\x11\n\tintensity\x18\x03 \x01(\t\x12\r\n\x05top_k\x18\x04 \x01(\x05\x12\x19\n\x11\x63\x61tegories_filter\x18\x05 \x03(\t\":\n\x0fRankingResponse\x12\'\n\x0bscored_pois\x18\x01 \x03(\x0b\x32\x12.ranking.ScoredPOI\"\xc5\x01\n\tScoredPOI\x12\x0e\n\x06poi_id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x0c\n\x04tags\x18\x06 \x03(\t\x12\x13\n\x0b\x64\x65scription\x18\x07 \x01(\t\x12\x19\n\x11\x61vg_visit_minutes\x18\x08 \x01(\x05\x12\x0e\n\x06rating\x18\t \x01(\x01\x12\r\n\x05score\x18\n \x01(\x01\x12\x11\n\tembedding\x18\x0b \x03(\x02\x32O\n\x0eRankingService\x12=\n\x08RankPOIs\x12\x17.ranking.RankingRequest\x1a\x18.ranking.RankingResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rranking.proto\x12\x07ranking\"\xb2\x01\n\x0eRankingRequest\x12\x16\n\x0euser_embedding\x18\x01 \x03(\x02\x12\x13\n\x0bsocial_mode\x18\x02 \x01(\t\x12\x11\n\tintensity\x18\x03 \x01(\t\x12\r\n\x05top_k\x18\x04 \x01(\x05\x12\x19\n\x11\x63\x61tegories_filter\x18\x05 \x03(\t\x12\x1f\n\x12start_time_minutes\x18\x06 \x01(\x05H\x00\x88\x01\x01\x42\x15\n\x13_start_time_minutes\":\n\x0fRankingResponse\x12\'\n\x0bscored_pois\x18\x01 \x03(\x0b\x32\x12.ranking.ScoredPOI\"\x9a\x02\n\tScoredPOI\x12\x0e\n\x06poi_id\x18\x01 \x01(\x05\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0b\n\x03lat\x18\x03 \x01(\x01\x12\x0b\n\x03lon\x18\x04 \x01(\x01\x12\x10\n\x08\x63\x61tegory\x18\x05 \x01(\t\x12\x0c\n\x04tags\x18\x06 \x03(\t\x12\x13\n\x0b\x64\x65scription\x18\x07 \x01(\t\x12\x19\n\x11\x61vg_visit_minutes\x18\x08 \x01(\x05\x12\x0e\n\x06rating\x18\t \x01(\x01\x12\r\n\x05score\x18\n \x01(\x01\x12\x11\n\tembedding\x18\x0b \x03(\x02\x12\x13\n\x0bsocial_mode\x18\x0c \x01(\t\x12\x17\n\x0fintensity_level\x18\r \x01(\t\x12\x11\n\topen_time\x18\x0e \x01(\t\x12\x12\n\nclose_time\x18\x0f \x01(\t2O\n\x0eRankingService\x12=\n\x08RankPOIs\x12\x17.ranking.RankingRequest\x1a\x18.ranking.RankingResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ranking_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_RANKINGREQUEST']._serialized_start=26
-  _globals['_RANKINGREQUEST']._serialized_end=148
-  _globals['_RANKINGRESPONSE']._serialized_start=150
-  _globals['_RANKINGRESPONSE']._serialized_end=208
-  _globals['_SCOREDPOI']._serialized_start=211
-  _globals['_SCOREDPOI']._serialized_end=408
-  _globals['_RANKINGSERVICE']._serialized_start=410
-  _globals['_RANKINGSERVICE']._serialized_end=489
+  _globals['_RANKINGREQUEST']._serialized_start=27
+  _globals['_RANKINGREQUEST']._serialized_end=205
+  _globals['_RANKINGRESPONSE']._serialized_start=207
+  _globals['_RANKINGRESPONSE']._serialized_end=265
+  _globals['_SCOREDPOI']._serialized_start=268
+  _globals['_SCOREDPOI']._serialized_end=550
+  _globals['_RANKINGSERVICE']._serialized_start=552
+  _globals['_RANKINGSERVICE']._serialized_end=631
 # @@protoc_insertion_point(module_scope)

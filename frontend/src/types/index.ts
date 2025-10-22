@@ -37,6 +37,7 @@ export interface POIInRoute {
   is_coffee_break: boolean
   is_open?: boolean
   opening_hours?: string
+  availability_note?: string
   category?: string
   tags?: string[]
   emoji?: string

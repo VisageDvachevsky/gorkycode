@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from itertools import combinations
+from math import ceil
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import grpc
@@ -107,7 +108,9 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
             return max_candidates
         base = int(effective_minutes // slot)
         remainder = effective_minutes - base * slot
-        if remainder >= slot * 0.6:
+        if intensity in {"intense", "high"}:
+            base = int(ceil(effective_minutes / slot))
+        elif remainder >= slot * 0.35:
             base += 1
         target = max(1, base)
         return min(target, max_candidates)
@@ -199,11 +202,12 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         safety = self._safety_buffer(intensity)
         budget = max(0.0, available_minutes - safety)
 
-        pool_size = min(len(pois), max(target_count + 2, 5))
-        pool_size = min(pool_size, 8)
+        pool_size = min(len(pois), max(target_count + 3, 6))
+        pool_size = min(pool_size, 10)
         candidate_pool = list(range(pool_size))
 
         fallback: Optional[Tuple[List[int], float, float]] = None
+        best_nearby: Optional[Tuple[List[int], float, float]] = None
 
         for count in range(min(target_count, len(candidate_pool)), 0, -1):
             for subset in combinations(candidate_pool, count):
@@ -215,6 +219,16 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 )
                 if total_time <= budget:
                     return route_indices, total_time, total_distance
+                if total_time <= budget * 1.08:
+                    if (
+                        best_nearby is None
+                        or len(route_indices) > len(best_nearby[0])
+                        or (
+                            len(route_indices) == len(best_nearby[0])
+                            and total_time < best_nearby[1]
+                        )
+                    ):
+                        best_nearby = (list(route_indices), total_time, total_distance)
                 if fallback is None:
                     fallback = (list(route_indices), total_time, total_distance)
                     continue
@@ -225,6 +239,9 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                     and total_time < fallback[1]
                 ):
                     fallback = (list(route_indices), total_time, total_distance)
+
+        if best_nearby:
+            return best_nearby
 
         return fallback if fallback else ([], 0.0, 0.0)
 
