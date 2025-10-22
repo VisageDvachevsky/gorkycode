@@ -316,14 +316,19 @@ class RoutePlanner:
         route_items: List[POIInRoute] = []
         geometry_points: List[Tuple[float, float]] = [(self.start_lat, self.start_lon)]
 
+        precomputed_legs = await self._compute_sequence_legs(ordered)
+
         cursor_time = self.start_time
         current_lat, current_lon = self.start_lat, self.start_lon
         order_counter = 1
         last_coffee_timestamp = cursor_time
         preferences = self.request.coffee_preferences
         interval = recommended_interval(self.request.intensity, preferences)
-        for candidate in ordered:
-            leg_estimate = await self._compute_leg((current_lat, current_lon), (candidate.lat, candidate.lon))
+        for idx, candidate in enumerate(ordered):
+            if idx < len(precomputed_legs):
+                leg_estimate = precomputed_legs[idx]
+            else:
+                leg_estimate = await self._compute_leg((current_lat, current_lon), (candidate.lat, candidate.lon))
             cursor_time += timedelta(minutes=leg_estimate.duration_minutes)
             geometry_points.extend(leg_estimate.geometry[1:])
             movement_legs.append(self._leg_instruction(leg_estimate, (current_lat, current_lon), (candidate.lat, candidate.lon)))
@@ -461,6 +466,38 @@ class RoutePlanner:
         safety_buffer = safety_buffer_minutes(self.request.intensity)
         effective_minutes = max(15.0, total_minutes - reserved_coffee - safety_buffer)
         return effective_minutes
+
+    async def _compute_sequence_legs(self, candidates: List[PlannedCandidate]) -> List[LegEstimate]:
+        if not candidates:
+            return []
+
+        waypoints = [(candidate.lat, candidate.lon) for candidate in candidates]
+        try:
+            legs, _ = await self.osrm_client.route((self.start_lat, self.start_lon), waypoints)
+        except Exception as exc:
+            logger.debug("OSRM multi-leg request failed, falling back to haversine: %s", exc)
+            legs = []
+
+        if len(legs) != len(candidates):
+            legs = []
+            cursor_lat, cursor_lon = self.start_lat, self.start_lon
+            for candidate in candidates:
+                distance = haversine_km(cursor_lat, cursor_lon, candidate.lat, candidate.lon)
+                minutes = minutes_from_distance(distance)
+                legs.append(
+                    LegEstimate(
+                        distance_km=distance,
+                        duration_minutes=minutes,
+                        geometry=[
+                            (float(cursor_lat), float(cursor_lon)),
+                            (float(candidate.lat), float(candidate.lon)),
+                        ],
+                        maneuvers=[],
+                    )
+                )
+                cursor_lat, cursor_lon = candidate.lat, candidate.lon
+
+        return legs
 
     async def _compute_leg(
         self,

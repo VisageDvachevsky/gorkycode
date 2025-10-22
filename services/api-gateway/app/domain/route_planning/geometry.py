@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import List, Sequence, Tuple
@@ -7,6 +8,8 @@ from typing import List, Sequence, Tuple
 import httpx
 
 from .intensity import minutes_from_distance, WALK_SPEED_KMH
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,6 +34,8 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 class OSRMClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
+        self._available = True
+        self._timeout = httpx.Timeout(5.0, connect=2.0)
 
     async def route(
         self,
@@ -41,6 +46,9 @@ class OSRMClient:
         if not waypoints:
             return [], [(float(start[0]), float(start[1]))]
 
+        if not self._available:
+            raise RuntimeError("OSRM client disabled after previous failure")
+
         coords = [start, *waypoints]
         coord_pairs = [f"{lon},{lat}" for lat, lon in coords]
         url = f"{self.base_url}/route/v1/{profile}/" + ";".join(coord_pairs)
@@ -49,12 +57,23 @@ class OSRMClient:
             "geometries": "geojson",
             "overview": "full",
         }
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.debug("OSRM request failed: %s", exc)
+            self._available = False
+            raise RuntimeError("OSRM request failed") from exc
+        except Exception as exc:
+            logger.debug("Unexpected OSRM failure: %s", exc)
+            self._available = False
+            raise
+
         payload = response.json()
         routes = payload.get("routes") or []
         if not routes:
+            self._available = False
             raise RuntimeError("OSRM returned no routes")
 
         route_payload = routes[0]
