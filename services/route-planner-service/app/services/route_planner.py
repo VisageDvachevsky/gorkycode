@@ -164,6 +164,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         pois: Sequence[route_pb2.POIInfo],
         sequence: Sequence[int],
         intensity: str,
+        start_point: CoordinateTuple,
     ) -> Tuple[float, float]:
         if not sequence:
             return 0.0, 0.0
@@ -171,20 +172,31 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         total_time = 0.0
         total_distance = 0.0
         padding = self._transition_padding(intensity)
-        previous = 0
+        previous_matrix_idx = 0
+        previous_point = start_point
 
         for idx in sequence:
             matrix_idx = idx + 1
-            distance = float(matrix[previous][matrix_idx])
-            if distance < 0:
-                distance = 0.0
+            current_poi = pois[idx]
+            current_point = (current_poi.lat, current_poi.lon)
+            distance = float(matrix[previous_matrix_idx][matrix_idx])
+
+            if not np.isfinite(distance) or distance <= 0:
+                distance = twogis_client.calculate_distance(
+                    previous_point[0],
+                    previous_point[1],
+                    current_point[0],
+                    current_point[1],
+                )
+
             walk_minutes = self._calculate_walk_time_minutes(distance)
             visit_minutes = self._effective_visit_minutes(
                 pois[idx].avg_visit_minutes, intensity
             )
             total_time += walk_minutes + visit_minutes + padding
             total_distance += distance
-            previous = matrix_idx
+            previous_matrix_idx = matrix_idx
+            previous_point = current_point
 
         return total_time, total_distance
 
@@ -195,6 +207,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
         available_minutes: float,
         intensity: str,
         target_count: int,
+        start_point: CoordinateTuple,
     ) -> Tuple[List[int], float, float]:
         if target_count <= 0 or not pois:
             return [], 0.0, 0.0
@@ -215,7 +228,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 if not route_indices:
                     continue
                 total_time, total_distance = self._evaluate_sequence(
-                    matrix, pois, route_indices, intensity
+                    matrix, pois, route_indices, intensity, start_point
                 )
                 if total_time <= budget:
                     return route_indices, total_time, total_distance
@@ -287,6 +300,7 @@ class RoutePlannerServicer(route_pb2_grpc.RoutePlannerServiceServicer):
                 available_minutes=available_minutes,
                 intensity=intensity,
                 target_count=target_count,
+                start_point=start_point,
             )
 
             if not route_indices:

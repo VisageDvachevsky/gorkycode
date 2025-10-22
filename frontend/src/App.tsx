@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Hero from './components/Hero'
 import RouteWizard from './components/RouteWizard'
 import RouteViewer from './components/route-viewer'
+import { api } from './api/client'
 import type { RouteResponse } from './types'
 
 const queryClient = new QueryClient({
@@ -56,18 +57,7 @@ type CompactRoute = {
   sh?: string
 }
 
-const encoder = new TextEncoder()
 const decoder = new TextDecoder()
-const BASE64_CHUNK_SIZE = 0x8000
-
-const toBase64 = (bytes: Uint8Array) => {
-  let binary = ''
-  for (let i = 0; i < bytes.length; i += BASE64_CHUNK_SIZE) {
-    const chunk = bytes.subarray(i, i + BASE64_CHUNK_SIZE)
-    binary += String.fromCharCode(...chunk)
-  }
-  return window.btoa(binary).replace(/=+$/, '')
-}
 
 const fromBase64 = (encoded: string) => {
   const padding = encoded.length % 4 === 0 ? '' : '='.repeat(4 - (encoded.length % 4))
@@ -78,42 +68,6 @@ const fromBase64 = (encoded: string) => {
   }
   return bytes
 }
-
-const toCompactRoute = (route: RouteResponse): CompactRoute => ({
-  v: 1,
-  s: route.summary,
-  tm: route.total_est_minutes,
-  td: route.total_distance_km,
-  wd: route.walking_distance_km,
-  tr: route.transit_distance_km,
-  nt: route.notes,
-  at: route.atmospheric_description ?? undefined,
-  wa: route.weather_advice ?? undefined,
-  st: route.start_time_used ? String(route.start_time_used) : undefined,
-  tw: route.time_warnings && route.time_warnings.length ? route.time_warnings : undefined,
-  rg: route.route_geometry && route.route_geometry.length ? route.route_geometry : undefined,
-  rt: route.route.map(poi => ({
-    i: poi.poi_id,
-    o: poi.order,
-    n: poi.name,
-    lt: poi.lat,
-    ln: poi.lon,
-    w: poi.why,
-    tp: poi.tip ?? undefined,
-    vm: poi.est_visit_minutes,
-    ar: String(poi.arrival_time),
-    lv: String(poi.leave_time),
-    cb: poi.is_coffee_break ? 1 : undefined,
-    io: typeof poi.is_open === 'boolean' ? (poi.is_open ? 1 : 0) : undefined,
-    oh: poi.opening_hours ?? undefined,
-    an: poi.availability_note ?? undefined,
-    c: poi.category ?? undefined,
-    tg: poi.tags && poi.tags.length ? poi.tags : undefined,
-    em: poi.emoji ?? undefined,
-    df: poi.distance_from_previous_km ?? undefined,
-  })),
-  sh: route.share_token ?? undefined,
-})
 
 const fromCompactRoute = (data: any): RouteResponse | null => {
   if (!data || typeof data !== 'object') return null
@@ -163,13 +117,6 @@ const fromCompactRoute = (data: any): RouteResponse | null => {
   }
 }
 
-const encodeRouteForShare = (route: RouteResponse) => {
-  const compact = toCompactRoute(route)
-  const json = JSON.stringify(compact)
-  const bytes = encoder.encode(json)
-  return toBase64(bytes)
-}
-
 const decodeRouteFromShare = (encoded: string): RouteResponse | null => {
   try {
     const bytes = fromBase64(encoded)
@@ -189,26 +136,56 @@ function App() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
+    let isActive = true
     const params = new URLSearchParams(window.location.search)
+    const shareToken = params.get('share')
     const encoded = params.get('itinerary')
-    if (encoded) {
+
+    const hydrateFromEncoded = () => {
+      if (!encoded) return
       const restored = decodeRouteFromShare(encoded)
-      if (restored) {
+      if (restored && isActive) {
         setRoute(restored)
         setAppState('viewing')
       }
     }
-    setHydrated(true)
+
+    if (shareToken) {
+      ;(async () => {
+        try {
+          const sharedRoute = await api.getSharedRoute(shareToken)
+          if (!isActive) return
+          setRoute(sharedRoute)
+          setAppState('viewing')
+        } catch (error) {
+          console.error('Failed to load shared route', error)
+          if (isActive) {
+            hydrateFromEncoded()
+          }
+        } finally {
+          if (isActive) {
+            setHydrated(true)
+          }
+        }
+      })()
+    } else {
+      hydrateFromEncoded()
+      setHydrated(true)
+    }
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   useEffect(() => {
     if (!hydrated) return
     const url = new URL(window.location.href)
-    if (!route) {
-      url.searchParams.delete('itinerary')
+    url.searchParams.delete('itinerary')
+    if (!route?.share_token) {
+      url.searchParams.delete('share')
     } else {
-      const encoded = encodeRouteForShare(route)
-      url.searchParams.set('itinerary', encoded)
+      url.searchParams.set('share', route.share_token)
     }
     const query = url.searchParams.toString()
     const next = `${url.pathname}${query ? `?${query}` : ''}`

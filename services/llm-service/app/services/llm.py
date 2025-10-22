@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -44,11 +44,20 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         try:
             system_prompt = self._load_system_prompt()
             user_prompt = self._build_detailed_prompt(request)
+            expected_poi_ids = [poi.id for poi in request.route]
+            response_format = None
+
+            if settings.LLM_PROVIDER == "openai" and expected_poi_ids:
+                response_format = self._build_openai_response_format(expected_poi_ids)
 
             if settings.LLM_PROVIDER == "anthropic" and self.anthropic_client:
                 response_text = await self._call_anthropic(system_prompt, user_prompt)
             elif settings.LLM_PROVIDER == "openai" and self.openai_client:
-                response_text = await self._call_openai(system_prompt, user_prompt)
+                response_text = await self._call_openai(
+                    system_prompt,
+                    user_prompt,
+                    response_format=response_format,
+                )
             else:
                 logger.warning("No LLM provider available, using fallback")
                 return self._fallback_response(request)
@@ -62,11 +71,18 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
                 logger.error("LLM response missing 'explanations' field")
                 raise ValueError("Missing explanations field")
 
-            explanations = parsed["explanations"]
-            expected_poi_ids = {poi.id for poi in request.route}
-            received_poi_ids = {exp["poi_id"] for exp in explanations if "poi_id" in exp}
+            explanations = self._normalise_explanations(
+                parsed["explanations"],
+                expected_poi_ids,
+            )
+            expected_set = set(expected_poi_ids)
+            received_poi_ids = {
+                exp["poi_id"]
+                for exp in explanations
+                if "poi_id" in exp and isinstance(exp["poi_id"], int)
+            }
 
-            missing_ids = expected_poi_ids - received_poi_ids
+            missing_ids = expected_set - received_poi_ids
             if missing_ids:
                 logger.error("❌ LLM missing explanations for POI IDs: %s", missing_ids)
                 raise ValueError(f"Missing explanations for POI IDs: {missing_ids}")
@@ -87,6 +103,11 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
                     raise ValueError(f"Generic response detected for POI {poi_id}")
 
             logger.info("✓ LLM response validated: %s explanations, all unique", len(explanations))
+
+            order_map = {poi.id: idx for idx, poi in enumerate(request.route)}
+            explanations.sort(
+                key=lambda exp: order_map.get(exp.get("poi_id", -1), len(order_map))
+            )
 
             pb_explanations = [
                 llm_pb2.POIExplanation(
@@ -179,19 +200,19 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
 Формат JSON (ДЛЯ КАЖДОГО POI из списка выше):
 {{
     "summary": "Краткое вдохновляющее введение в маршрут (2-3 предложения)",
-    "explanations": [
-        {{
-            "poi_id": 1,
+    "explanations": {{
+        "160": {{
+            "poi_id": 160,
             "why": "КОНКРЕТНОЕ детальное объяснение с фактами и деталями. НЕ GENERIC! Минимум 2-3 предложения с РЕАЛЬНЫМИ деталями места.",
             "tip": "Практичный совет местного жителя или фотосовет"
         }}
-        // ... explanation для КАЖДОГО POI из списка выше
-    ],
+        // ... блок для КАЖДОГО POI с ключом = ID в виде строки
+    }},
     "atmospheric_description": "Поэтическое описание атмосферы прогулки (2-3 предложения)",
     "notes": ["Практичные заметки о маршруте, погоде, времени"]
 }}
 
-ВАЖНО: В массиве explanations должно быть ровно столько элементов, сколько POI в списке выше!
+ВАЖНО: В объекте explanations должно быть ровно столько ключей, сколько POI в списке выше, каждый ключ — строка ID.
 
 НЕ добавляй ```json или другие markdown теги. ТОЛЬКО JSON.
 """
@@ -240,16 +261,26 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         }
         return intensities.get(intensity, intensity)
 
-    async def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
-        response = await self.openai_client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
+    async def _call_openai(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        kwargs: Dict[str, Any] = {
+            "model": settings.LLM_MODEL,
+            "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
-            temperature=0.7,
-            max_tokens=4000
-        )
+            "temperature": 0.7,
+            "max_tokens": 4000,
+        }
+
+        if response_format:
+            kwargs["response_format"] = response_format
+
+        response = await self.openai_client.chat.completions.create(**kwargs)
         return response.choices[0].message.content
 
     async def _call_anthropic(self, system_prompt: str, user_prompt: str) -> str:
@@ -331,3 +362,88 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
             notes=["Маршрут оптимизирован по времени и расстоянию"],
             atmospheric_description="Приятная прогулка по интересным местам Нижнего Новгорода"
         )
+
+    def _build_openai_response_format(
+        self, expected_ids: Sequence[int]
+    ) -> Dict[str, Any]:
+        explanation_properties = {
+            str(poi_id): {
+                "type": "object",
+                "required": ["poi_id", "why", "tip"],
+                "properties": {
+                    "poi_id": {"type": "integer", "enum": [poi_id]},
+                    "why": {"type": "string", "minLength": 80},
+                    "tip": {"type": "string", "minLength": 30},
+                },
+                "additionalProperties": False,
+            }
+            for poi_id in expected_ids
+        }
+
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "route_explanation_payload",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "required": [
+                        "summary",
+                        "explanations",
+                        "atmospheric_description",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "summary": {"type": "string", "minLength": 40},
+                        "explanations": {
+                            "type": "object",
+                            "properties": explanation_properties,
+                            "required": [str(poi_id) for poi_id in expected_ids],
+                            "additionalProperties": False,
+                        },
+                        "atmospheric_description": {
+                            "type": "string",
+                            "minLength": 40,
+                        },
+                        "notes": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                    },
+                },
+            },
+        }
+
+    def _normalise_explanations(
+        self,
+        payload: Any,
+        expected_ids: Sequence[int],
+    ) -> List[Dict[str, Any]]:
+        if isinstance(payload, list):
+            return [
+                {
+                    "poi_id": int(exp.get("poi_id")) if "poi_id" in exp else 0,
+                    "why": exp.get("why", ""),
+                    "tip": exp.get("tip", ""),
+                }
+                for exp in payload
+                if isinstance(exp, dict)
+            ]
+
+        if isinstance(payload, dict):
+            explanations: List[Dict[str, Any]] = []
+            for poi_id in expected_ids:
+                key = str(poi_id)
+                data = payload.get(key)
+                if not isinstance(data, dict):
+                    continue
+                why = data.get("why", "")
+                tip = data.get("tip", "")
+                explanations.append({
+                    "poi_id": poi_id,
+                    "why": why,
+                    "tip": tip,
+                })
+            return explanations
+
+        raise ValueError("Unexpected explanations format from LLM")

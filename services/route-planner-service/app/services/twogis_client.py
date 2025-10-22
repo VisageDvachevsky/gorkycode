@@ -161,7 +161,7 @@ class TwoGISClient:
 
         data = await self._request_post(
             self.PUBLIC_TRANSPORT_URL,
-            params={},
+            params={"locale": "ru_RU", "route_locale": "ru_RU"},
             json_body=request_body,
             timeout=60,
         )

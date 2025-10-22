@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, time as dt_time
 from math import atan2, cos, radians, sin, sqrt
@@ -11,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import httpx
 
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
 from app.grpc.clients import grpc_clients
 from app.models.schemas import (
@@ -26,6 +29,7 @@ from app.models.schemas import (
 )
 from app.proto import llm_pb2, route_pb2
 from app.services.time_scheduler import time_scheduler
+from app.services.share_store import share_store
 
 logger = logging.getLogger(__name__)
 
@@ -498,11 +502,16 @@ def _generate_share_token(
         "p": list(poi_ids),
     }
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    salt = secrets.token_bytes(4)
+    digest = hashlib.blake2s(raw + salt, digest_size=9).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 async def _fetch_weather_advice(
-    lat: float, lon: float, highlight: Optional[str]
+    lat: float,
+    lon: float,
+    highlight: Optional[str],
+    intensity: str,
 ) -> Optional[str]:
     url = f"https://wttr.in/{lat},{lon}"
     params = {"format": "j1"}
@@ -556,9 +565,30 @@ async def _fetch_weather_advice(
     else:
         fragments.append("Погода располагает к прогулке")
 
+    clothing: List[str] = []
+
     if temp_value is not None:
         temp_label = int(round(temp_value))
         fragments.append(f"температура около {temp_label}°C")
+        if temp_label <= -10:
+            clothing.append("очень тёплую куртку и термоперчатки")
+        elif temp_label <= 0:
+            clothing.append("слоистую одежду и шапку")
+        elif temp_label <= 10:
+            clothing.append("ветровку или лёгкое пальто")
+        elif temp_label >= 24:
+            clothing.append("дышащую одежду и головной убор")
+
+    if precip_value >= 0.3:
+        clothing.append("непромокаемую обувь")
+
+    if intensity in {"intense", "high"}:
+        clothing.append("удобные кроссовки и лёгкий рюкзак для воды")
+    elif intensity in {"medium", "relaxed", "low"}:
+        clothing.append("комфортную обувь для долгой прогулки")
+
+    if clothing:
+        fragments.append("одежда: " + ", ".join(clothing))
 
     if highlight:
         fragments.append(f"но {highlight} всё равно впечатляет")
@@ -1183,6 +1213,7 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         start_lat,
         start_lon,
         highlight_name,
+        request.intensity,
     )
 
     notes: List[str] = [f"Старт: {start_label}"]
@@ -1242,4 +1273,26 @@ async def plan_route(request: RouteRequest) -> RouteResponse:
         share_token=share_token,
     )
 
+    await share_store.save_route(
+        share_token,
+        response.model_dump(mode="json", exclude_none=True),
+    )
+
     return response
+
+
+@router.get("/share/{token}", response_model=RouteResponse)
+async def load_shared_route(token: str) -> RouteResponse:
+
+    data = await share_store.load_route(token)
+    if not data:
+        raise HTTPException(404, "Ссылка недействительна или срок хранения истёк")
+
+    try:
+        route = RouteResponse.model_validate(data)
+    except ValidationError as exc:
+        logger.warning("Stored route for %s failed validation: %s", token, exc)
+        raise HTTPException(500, "Не удалось восстановить маршрут") from exc
+
+    await share_store.extend_ttl(token)
+    return route
