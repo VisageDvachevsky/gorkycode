@@ -41,7 +41,12 @@ export const api = {
     const { data } = await client.post<RouteResponse>('/route/plan', request)
     return data
   },
-  
+
+  async getSharedRoute(token: string): Promise<RouteResponse> {
+    const { data } = await client.get<RouteResponse>(`/route/share/${encodeURIComponent(token)}`)
+    return data
+  },
+
   async getCategories(): Promise<Category[]> {
     const { data } = await client.get<Category[]>('/categories/list')
     return data

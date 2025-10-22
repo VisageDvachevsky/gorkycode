@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     LLM_SERVICE_URL: str = "llm-service:50054"
     GEOCODING_SERVICE_URL: str = "geocoding-service:50055"
     POI_SERVICE_URL: str = "poi-service:50056"
+    REDIS_URL: str = "redis://redis:6379/0"
+    SHARE_TTL_SECONDS: int = 60 * 60 * 24 * 14
     
     class Config:
         env_file = ".env"
