@@ -29,7 +29,13 @@ from .explanations import (
     map_intensity_for_llm,
     map_intensity_for_ranking,
 )
-from .geometry import LegEstimate, OSRMClient, haversine_km, minutes_from_distance
+from .geometry import (
+    LegEstimate,
+    OSRMClient,
+    TwoGISRoutingClient,
+    haversine_km,
+    minutes_from_distance,
+)
 from .intensity import (
     candidate_multiplier,
     effective_visit_minutes,
@@ -88,6 +94,10 @@ class RoutePlanner:
         self.start_time: datetime
         self.scheduler_warnings: List[str] = []
         self.osrm_client = OSRMClient(settings.OSRM_BASE_URL)
+        self.road_router = TwoGISRoutingClient(
+            settings.TWOGIS_API_KEY,
+            locale=settings.TWOGIS_LOCALE,
+        )
         self.elevation_service = ElevationService(settings.ELEVATION_SERVICE_URL)
 
     async def plan(self) -> RouteResponse:
@@ -624,32 +634,12 @@ class RoutePlanner:
         if not candidates:
             return []
 
-        waypoints = [(candidate.lat, candidate.lon) for candidate in candidates]
-        try:
-            legs, _ = await self.osrm_client.route((self.start_lat, self.start_lon), waypoints)
-        except Exception as exc:
-            logger.debug("OSRM multi-leg request failed, falling back to haversine: %s", exc)
-            legs = []
-
-        if len(legs) != len(candidates):
-            legs = []
-            cursor_lat, cursor_lon = self.start_lat, self.start_lon
-            for candidate in candidates:
-                distance = haversine_km(cursor_lat, cursor_lon, candidate.lat, candidate.lon)
-                minutes = minutes_from_distance(distance)
-                legs.append(
-                    LegEstimate(
-                        distance_km=distance,
-                        duration_minutes=minutes,
-                        geometry=[
-                            (float(cursor_lat), float(cursor_lon)),
-                            (float(candidate.lat), float(candidate.lon)),
-                        ],
-                        maneuvers=[],
-                    )
-                )
-                cursor_lat, cursor_lon = candidate.lat, candidate.lon
-
+        legs: List[LegEstimate] = []
+        cursor = (self.start_lat, self.start_lon)
+        for candidate in candidates:
+            leg = await self._compute_leg(cursor, (candidate.lat, candidate.lon))
+            legs.append(leg)
+            cursor = (candidate.lat, candidate.lon)
         return legs
 
     async def _compute_leg(
@@ -657,17 +647,27 @@ class RoutePlanner:
         start: Tuple[float, float],
         end: Tuple[float, float],
     ) -> LegEstimate:
-        try:
-            legs, _ = await self.osrm_client.route(start, [end])
-            leg = legs[0] if legs else None
-        except Exception as exc:
-            logger.debug("OSRM lookup failed, using haversine fallback: %s", exc)
-            leg = None
+        leg: Optional[LegEstimate] = None
+
+        if self.road_router.is_enabled():
+            try:
+                leg = await self.road_router.route_leg(start, end)
+            except Exception as exc:
+                logger.debug("2GIS routing failed, fallback to OSRM: %s", exc)
+                leg = None
+
+        if leg is None:
+            try:
+                legs, _ = await self.osrm_client.route(start, [end])
+                leg = legs[0] if legs else None
+            except Exception as exc:
+                logger.debug("OSRM lookup failed, using haversine fallback: %s", exc)
+                leg = None
 
         if leg is None:
             distance = haversine_km(start[0], start[1], end[0], end[1])
             minutes = minutes_from_distance(distance)
-            return LegEstimate(
+            leg = LegEstimate(
                 distance_km=distance,
                 duration_minutes=minutes,
                 geometry=[start, end],

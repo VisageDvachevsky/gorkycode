@@ -7,7 +7,7 @@ from typing import List, Sequence, Tuple
 
 import httpx
 
-from .intensity import minutes_from_distance, WALK_SPEED_KMH
+from .intensity import WALK_SPEED_KMH, minutes_from_distance
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,189 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return radius * c
+
+
+class TwoGISRoutingClient:
+    ROUTING_URL = "https://routing.api.2gis.com/routing/7.0.0/global"
+
+    def __init__(
+        self,
+        api_key: str | None,
+        *,
+        locale: str = "ru_RU",
+        route_locale: str | None = None,
+        timeout: float = 30.0,
+    ) -> None:
+        self.api_key = api_key
+        self.locale = locale
+        self.route_locale = route_locale or locale
+        self._timeout = httpx.Timeout(timeout, connect=10.0)
+        self._enabled = bool(api_key)
+
+    def is_enabled(self) -> bool:
+        return self._enabled and bool(self.api_key)
+
+    async def route_leg(
+        self, start: Tuple[float, float], end: Tuple[float, float]
+    ) -> LegEstimate:
+        route = await self._request(points=[start, end])
+        return self._build_estimate(route, start, end)
+
+    async def route_sequence(
+        self, start: Tuple[float, float], waypoints: Sequence[Tuple[float, float]]
+    ) -> List[LegEstimate]:
+        legs: List[LegEstimate] = []
+        cursor = start
+        for target in waypoints:
+            legs.append(await self.route_leg(cursor, target))
+            cursor = target
+        return legs
+
+    async def _request(self, points: Sequence[Tuple[float, float]]) -> dict:
+        if not self.api_key:
+            raise RuntimeError("TWOGIS_API_KEY is not configured")
+
+        formatted = []
+        last_index = len(points) - 1
+        for idx, (lat, lon) in enumerate(points):
+            point_type = "stop" if idx in (0, last_index) else "via"
+            formatted.append({"type": point_type, "lat": float(lat), "lon": float(lon)})
+
+        payload = {
+            "points": formatted,
+            "transport": "pedestrian",
+            "route_mode": "fastest",
+            "output": "detailed",
+        }
+
+        params = {
+            "key": self.api_key,
+            "locale": self.locale,
+            "route_locale": self.route_locale,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                response = await client.post(self.ROUTING_URL, params=params, json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPError as exc:  # pragma: no cover - network failure fallback
+            self._enabled = False
+            logger.warning("2GIS routing request failed: %s", exc)
+            raise RuntimeError("2GIS routing request failed") from exc
+        except Exception as exc:  # pragma: no cover - defensive
+            self._enabled = False
+            logger.warning("Unexpected 2GIS routing failure: %s", exc)
+            raise RuntimeError("2GIS routing request failed") from exc
+
+        result = data.get("result")
+        if isinstance(result, list):
+            result = result[0] if result else None
+
+        if not isinstance(result, dict):
+            raise RuntimeError("2GIS routing returned empty result")
+
+        return result
+
+    def _build_estimate(
+        self,
+        route: dict,
+        start: Tuple[float, float],
+        end: Tuple[float, float],
+    ) -> LegEstimate:
+        geometry = self._parse_geometry(route)
+        if not geometry:
+            geometry = [(float(start[0]), float(start[1])), (float(end[0]), float(end[1]))]
+
+        distance_km = float(route.get("distance", 0.0)) / 1000.0
+        if distance_km <= 0:
+            distance_km = haversine_km(start[0], start[1], end[0], end[1])
+
+        duration_minutes = float(route.get("duration", 0.0)) / 60.0
+        if duration_minutes <= 0:
+            duration_minutes = minutes_from_distance(distance_km)
+
+        maneuvers = self._parse_maneuvers(route)
+
+        return LegEstimate(
+            distance_km=distance_km,
+            duration_minutes=duration_minutes,
+            geometry=[(float(lat), float(lon)) for lat, lon in geometry],
+            maneuvers=maneuvers,
+        )
+
+    def _parse_geometry(self, route: dict) -> List[Tuple[float, float]]:
+        maneuvers = route.get("maneuvers", [])
+        collected: List[Tuple[float, float]] = []
+        seen = set()
+
+        for maneuver in maneuvers:
+            path = maneuver.get("outcoming_path", {})
+            for segment in path.get("geometry", []):
+                selection = segment.get("selection", "")
+                if selection.startswith("LINESTRING"):
+                    for lat, lon in self._parse_wkt(selection):
+                        key = (round(lat, 6), round(lon, 6))
+                        if key not in seen:
+                            seen.add(key)
+                            collected.append((lat, lon))
+
+        if collected:
+            return collected
+
+        waypoints = route.get("waypoints", [])
+        for waypoint in waypoints:
+            point = waypoint.get("projected_point") or waypoint.get("original_point")
+            if point and "lat" in point and "lon" in point:
+                key = (round(point["lat"], 6), round(point["lon"], 6))
+                if key not in seen:
+                    seen.add(key)
+                    collected.append((point["lat"], point["lon"]))
+
+        return collected
+
+    def _parse_maneuvers(self, route: dict) -> List[dict]:
+        maneuvers: List[dict] = []
+        for maneuver in route.get("maneuvers", []):
+            instruction = (
+                maneuver.get("instruction", {}).get("text")
+                or maneuver.get("action", {}).get("text")
+                or maneuver.get("comment", "")
+            )
+            if not instruction:
+                continue
+
+            distance = maneuver.get("distance")
+            if distance is None:
+                distance = maneuver.get("outcoming_path", {}).get("length")
+
+            duration = maneuver.get("duration")
+
+            maneuvers.append(
+                {
+                    "instruction": instruction,
+                    "street_name": maneuver.get("street_name")
+                    or maneuver.get("road_name")
+                    or "",
+                    "distance": float(distance) if distance is not None else 0.0,
+                    "duration": float(duration) if duration is not None else 0.0,
+                }
+            )
+
+        return maneuvers
+
+    def _parse_wkt(self, wkt: str) -> List[Tuple[float, float]]:
+        try:
+            coords = wkt.replace("LINESTRING(", "").replace(")", "")
+            pairs = coords.split(",")
+            result: List[Tuple[float, float]] = []
+            for pair in pairs:
+                lon_str, lat_str = pair.strip().split()[:2]
+                result.append((float(lat_str), float(lon_str)))
+            return result
+        except Exception:  # pragma: no cover - defensive parsing guard
+            logger.debug("Failed to parse WKT geometry: %s", wkt[:80])
+            return []
 
 
 class OSRMClient:
@@ -188,3 +371,4 @@ def optimize_sequence(start: Tuple[float, float], points: Sequence[Tuple[float, 
         return []
     initial = nearest_neighbor_order(start, points)
     return two_opt(initial, start, points)
+
