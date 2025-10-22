@@ -105,8 +105,9 @@ async def test_fetch_weather_advice_builds_descriptive_message(monkeypatch):
 
     monkeypatch.setattr(route.httpx, "AsyncClient", fake_async_client)
 
-    advice = await route._fetch_weather_advice(56.3, 44.0, "Кремль")
+    advice = await route._fetch_weather_advice(56.3, 44.0, "Кремль", "intense")
 
     assert "дождливо" in advice.lower()
     assert "кремль" in advice.lower()
+    assert "одежда" in advice.lower()
     assert captured["request"][0].startswith("https://wttr.in")
