@@ -369,11 +369,11 @@ class LLMServicer(llm_pb2_grpc.LLMServiceServicer):
         explanation_properties = {
             str(poi_id): {
                 "type": "object",
-                "required": ["poi_id", "why"],
+                "required": ["poi_id", "why", "tip"],
                 "properties": {
                     "poi_id": {"type": "integer", "enum": [poi_id]},
                     "why": {"type": "string", "minLength": 80},
-                    "tip": {"type": "string"},
+                    "tip": {"type": "string", "minLength": 30},
                 },
                 "additionalProperties": False,
             }

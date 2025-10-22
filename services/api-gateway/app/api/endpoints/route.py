@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, time as dt_time
 from math import atan2, cos, radians, sin, sqrt
@@ -500,7 +502,9 @@ def _generate_share_token(
         "p": list(poi_ids),
     }
     raw = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    salt = secrets.token_bytes(4)
+    digest = hashlib.blake2s(raw + salt, digest_size=9).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
 async def _fetch_weather_advice(
