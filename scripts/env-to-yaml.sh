@@ -1,42 +1,78 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-ENV_FILE=".env"
-OUTPUT_FILE="values.yaml"
+ENV_FILE="${1:-.env}"
+OUTPUT_FILE="${2:-.env.yaml}"
 
-if [ ! -f "$ENV_FILE" ]; then
-  echo "❌ .env file not found!"
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "❌ .env file not found at ${ENV_FILE}!"
   exit 1
 fi
 
-echo "📝 Converting .env to values.yaml..."
+echo "📝 Converting ${ENV_FILE} to ${OUTPUT_FILE}..."
 
-# Load environment variables
-source $ENV_FILE
+set -a
+source "${ENV_FILE}"
+set +a
 
-cat > $OUTPUT_FILE << EOF
-# Generated from .env file
-# This file overrides helm/ai-tourist/values.yaml
+required_vars=(DB_PASSWORD TWOGIS_API_KEY JWT_SECRET_KEY ENCRYPTION_KEY)
+missing=()
+for var in "${required_vars[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    missing+=("${var}")
+  fi
+done
 
-# Global settings
-global:
-  environment: ${ENVIRONMENT:-production}
+if (( ${#missing[@]} > 0 )); then
+  echo "❌ Missing required variables: ${missing[*]}"
+  exit 1
+fi
 
-# Secrets (override with .env.yaml)
-secrets:
-  dbPassword: "${DB_PASSWORD:-change_in_production}"
-  openaiApiKey: "${OPENAI_API_KEY:-}"
-  anthropicApiKey: "${ANTHROPIC_API_KEY:-}"
-  twogisApiKey: "${TWOGIS_API_KEY:-}"
-  jwtSecret: "${JWT_SECRET_KEY:-generate_random_secret}"
-  encryptionKey: "${ENCRYPTION_KEY:-generate_random_key}"
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+  echo "⚠️  No LLM API keys provided. The LLM service will use fallback responses."
+fi
 
-# LLM Configuration
-llm:
-  provider: "${LLM_PROVIDER:-openai}"
-  model: "${LLM_MODEL:-gpt-4o-mini}"
+validate_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "${value}" =~ ^[0-9]+$ ]]; then
+    echo "❌ ${name} must be a positive integer (got '${value}')"
+    exit 1
+  fi
+}
 
-# Frontend
+normalize_bool() {
+  local name="$1"
+  local value="${2:-false}"
+  local lower
+  lower="$(echo "${value}" | tr '[:upper:]' '[:lower:]')"
+  case "${lower}" in
+    true|false)
+      printf "%s" "${lower}"
+      ;;
+    *)
+      echo "❌ ${name} must be true or false (got '${value}')"
+      exit 1
+      ;;
+  esac
+}
+
+validate_positive_integer "FRONTEND_REPLICAS" "${FRONTEND_REPLICAS:-2}"
+validate_positive_integer "API_GATEWAY_REPLICAS" "${API_GATEWAY_REPLICAS:-2}"
+validate_positive_integer "EMBEDDING_REPLICAS" "${EMBEDDING_REPLICAS:-2}"
+validate_positive_integer "EMBEDDING_BATCH_SIZE" "${EMBEDDING_BATCH_SIZE:-32}"
+validate_positive_integer "RANKING_REPLICAS" "${RANKING_REPLICAS:-2}"
+validate_positive_integer "ROUTE_PLANNER_REPLICAS" "${ROUTE_PLANNER_REPLICAS:-2}"
+validate_positive_integer "LLM_SERVICE_REPLICAS" "${LLM_SERVICE_REPLICAS:-1}"
+validate_positive_integer "GEOCODING_REPLICAS" "${GEOCODING_REPLICAS:-1}"
+validate_positive_integer "POI_REPLICAS" "${POI_REPLICAS:-1}"
+
+POSTGRESQL_ENABLED_VALUE="$(normalize_bool "POSTGRESQL_ENABLED" "${POSTGRESQL_ENABLED:-true}")"
+POSTGRESQL_PERSISTENCE_ENABLED_VALUE="$(normalize_bool "POSTGRESQL_PERSISTENCE_ENABLED" "${POSTGRESQL_PERSISTENCE_ENABLED:-true}")"
+REDIS_ENABLED_VALUE="$(normalize_bool "REDIS_ENABLED" "${REDIS_ENABLED:-true}")"
+REDIS_PERSISTENCE_ENABLED_VALUE="$(normalize_bool "REDIS_PERSISTENCE_ENABLED" "${REDIS_PERSISTENCE_ENABLED:-true}")"
+INGRESS_ENABLED_VALUE="$(normalize_bool "INGRESS_ENABLED" "${INGRESS_ENABLED:-true}")"
+
 frontend:
   replicas: ${FRONTEND_REPLICAS:-2}
   image:
@@ -49,7 +85,6 @@ frontend:
       memory: "${FRONTEND_MEMORY_LIMIT:-256Mi}"
       cpu: "${FRONTEND_CPU_LIMIT:-200m}"
 
-# API Gateway
 apiGateway:
   replicas: ${API_GATEWAY_REPLICAS:-2}
   image:
@@ -62,7 +97,6 @@ apiGateway:
       memory: "${API_GATEWAY_MEMORY_LIMIT:-512Mi}"
       cpu: "${API_GATEWAY_CPU_LIMIT:-500m}"
 
-# Embedding Service
 embeddingService:
   replicas: ${EMBEDDING_REPLICAS:-2}
   image:
@@ -77,7 +111,6 @@ embeddingService:
       memory: "${EMBEDDING_MEMORY_LIMIT:-1Gi}"
       cpu: "${EMBEDDING_CPU_LIMIT:-1000m}"
 
-# Ranking Service
 rankingService:
   replicas: ${RANKING_REPLICAS:-2}
   image:
@@ -90,7 +123,6 @@ rankingService:
       memory: "${RANKING_MEMORY_LIMIT:-512Mi}"
       cpu: "${RANKING_CPU_LIMIT:-500m}"
 
-# Route Planner Service
 routePlannerService:
   replicas: ${ROUTE_PLANNER_REPLICAS:-2}
   image:
@@ -103,7 +135,6 @@ routePlannerService:
       memory: "${ROUTE_PLANNER_MEMORY_LIMIT:-512Mi}"
       cpu: "${ROUTE_PLANNER_CPU_LIMIT:-500m}"
 
-# LLM Service
 llmService:
   replicas: ${LLM_SERVICE_REPLICAS:-1}
   image:
@@ -116,7 +147,6 @@ llmService:
       memory: "${LLM_SERVICE_MEMORY_LIMIT:-512Mi}"
       cpu: "${LLM_SERVICE_CPU_LIMIT:-500m}"
 
-# Geocoding Service
 geocodingService:
   replicas: ${GEOCODING_REPLICAS:-1}
   image:
@@ -129,7 +159,6 @@ geocodingService:
       memory: "${GEOCODING_MEMORY_LIMIT:-256Mi}"
       cpu: "${GEOCODING_CPU_LIMIT:-200m}"
 
-# POI Service
 poiService:
   replicas: ${POI_REPLICAS:-1}
   image:
@@ -142,14 +171,13 @@ poiService:
       memory: "${POI_MEMORY_LIMIT:-512Mi}"
       cpu: "${POI_CPU_LIMIT:-500m}"
 
-# PostgreSQL
 postgresql:
-  enabled: ${POSTGRESQL_ENABLED:-true}
+  enabled: ${POSTGRESQL_ENABLED_VALUE}
   image:
     tag: "${POSTGRESQL_IMAGE_TAG:-16-alpine}"
   persistence:
-    enabled: ${POSTGRESQL_PERSISTENCE_ENABLED:-true}
-    size: ${POSTGRESQL_STORAGE_SIZE:-1Gi}
+    enabled: ${POSTGRESQL_PERSISTENCE_ENABLED_VALUE}
+    size: "${POSTGRESQL_STORAGE_SIZE:-1Gi}"
   resources:
     requests:
       memory: "${POSTGRESQL_MEMORY_REQUEST:-256Mi}"
@@ -158,14 +186,13 @@ postgresql:
       memory: "${POSTGRESQL_MEMORY_LIMIT:-512Mi}"
       cpu: "${POSTGRESQL_CPU_LIMIT:-500m}"
 
-# Redis
 redis:
-  enabled: ${REDIS_ENABLED:-true}
+  enabled: ${REDIS_ENABLED_VALUE}
   image:
     tag: "${REDIS_IMAGE_TAG:-7-alpine}"
   persistence:
-    enabled: ${REDIS_PERSISTENCE_ENABLED:-true}
-    size: ${REDIS_STORAGE_SIZE:-1Gi}
+    enabled: ${REDIS_PERSISTENCE_ENABLED_VALUE}
+    size: "${REDIS_STORAGE_SIZE:-1Gi}"
   resources:
     requests:
       memory: "${REDIS_MEMORY_REQUEST:-128Mi}"
@@ -174,19 +201,6 @@ redis:
       memory: "${REDIS_MEMORY_LIMIT:-256Mi}"
       cpu: "${REDIS_CPU_LIMIT:-200m}"
 
-# Ingress
 ingress:
-  enabled: ${INGRESS_ENABLED:-true}
-  className: ${INGRESS_CLASS:-nginx}
-EOF
-
-echo "✅ Generated $OUTPUT_FILE"
-echo ""
-echo "📋 This file can be used to override helm/ai-tourist/values.yaml:"
-echo "   - All services with correct names (apiGateway, embeddingService, etc.)"
-echo "   - Resources nested within each service"
-echo "   - Image tags configurable per service"
-echo "   - Database and Redis settings"
-echo ""
-echo "💡 Usage:"
-echo "   helm upgrade --install ai-tourist ./helm/ai-tourist -f $OUTPUT_FILE"
+  enabled: ${INGRESS_ENABLED_VALUE}
+  className: "${INGRESS_CLASS:-nginx}"

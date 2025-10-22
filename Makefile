@@ -2,6 +2,7 @@
 
 NAMESPACE := ai-tourist
 INGRESS_HOST := ai-tourist.local
+HELM_VALUES_ARGS := $(if $(wildcard .env.yaml), -f .env.yaml,)
 
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
@@ -35,7 +36,7 @@ deploy: setup-ingress
 	@helm upgrade --install ai-tourist helm/ai-tourist/ \
 		-n $(NAMESPACE) \
 		--wait \
-		--timeout 10m \
+		--timeout 10m$(HELM_VALUES_ARGS) \
 		--set ingress.enabled=true \
 		--set ingress.host=$(INGRESS_HOST)
 	@echo "$(GREEN)✅ Deployment complete$(NC)"
