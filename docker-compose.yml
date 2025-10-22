@@ -1,77 +1,182 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  db:
+  postgres:
     image: postgres:16-alpine
-    container_name: aitourist-db
+    container_name: ai-tourist-postgres
     environment:
-      POSTGRES_USER: aitourist
-      POSTGRES_PASSWORD: dev_password_change_in_prod
-      POSTGRES_DB: aitourist_db
+      POSTGRES_DB: ai_tourist
+      POSTGRES_USER: ai_tourist
+      POSTGRES_PASSWORD: ai_tourist
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aitourist -d aitourist_db"]
+      test: ["CMD-SHELL", "pg_isready -U ai_tourist -d ai_tourist"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - aitourist-network
+      - ai-tourist
 
   redis:
     image: redis:7-alpine
-    container_name: aitourist-redis
-    ports:
-      - "6379:6379"
+    container_name: ai-tourist-redis
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
     networks:
-      - aitourist-network
+      - ai-tourist
 
-  backend:
+  embedding-service:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production  
-    container_name: aitourist-api
+      context: .
+      dockerfile: services/embedding-service/Dockerfile
+    container_name: ai-tourist-embedding
     environment:
-      DATABASE_URL: postgresql://aitourist:dev_password_change_in_prod@db:5432/aitourist_db
+      GRPC_PORT: 50051
+      METRICS_PORT: 9101
       REDIS_URL: redis://redis:6379/0
-      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
-      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-20250514}
-      ENVIRONMENT: production
-      PYTHONPATH: /app
-    volumes:
-      - ./data:/app/data:ro
-    ports:
-      - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - aitourist-network
+      - ai-tourist
     restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  ranking-service:
+    build:
+      context: .
+      dockerfile: services/ranking-service/Dockerfile
+    container_name: ai-tourist-ranking
+    environment:
+      GRPC_PORT: 50052
+      METRICS_PORT: 9102
+      DATABASE_URL: postgresql+asyncpg://ai_tourist:ai_tourist@postgres:5432/ai_tourist
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai-tourist
+    restart: unless-stopped
+
+  route-planner-service:
+    build:
+      context: .
+      dockerfile: services/route-planner-service/Dockerfile
+    container_name: ai-tourist-route-planner
+    environment:
+      GRPC_PORT: 50053
+      METRICS_PORT: 9103
+      REDIS_URL: redis://redis:6379/0
+      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
+      NAVITIA_API_KEY: ${NAVITIA_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-tourist
+    restart: unless-stopped
+
+  llm-service:
+    build:
+      context: .
+      dockerfile: services/llm-service/Dockerfile
+    container_name: ai-tourist-llm
+    environment:
+      GRPC_PORT: 50054
+      METRICS_PORT: 9104
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_MODEL: ${LLM_MODEL:-claude-3-5-sonnet-20241022}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    networks:
+      - ai-tourist
+    restart: unless-stopped
+
+  geocoding-service:
+    build:
+      context: .
+      dockerfile: services/geocoding-service/Dockerfile
+    container_name: ai-tourist-geocoding
+    environment:
+      GRPC_PORT: 50055
+      METRICS_PORT: 9105
+      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
+    networks:
+      - ai-tourist
+    restart: unless-stopped
+
+  poi-service:
+    build:
+      context: .
+      dockerfile: services/poi-service/Dockerfile
+    container_name: ai-tourist-poi
+    environment:
+      GRPC_PORT: 50056
+      METRICS_PORT: 9106
+      DATABASE_URL: postgresql+asyncpg://ai_tourist:ai_tourist@postgres:5432/ai_tourist
+      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - ai-tourist
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: ai-tourist-api-gateway
+    environment:
+      ENVIRONMENT: development
+      EMBEDDING_SERVICE_URL: embedding-service:50051
+      RANKING_SERVICE_URL: ranking-service:50052
+      ROUTE_SERVICE_URL: route-planner-service:50053
+      LLM_SERVICE_URL: llm-service:50054
+      GEOCODING_SERVICE_URL: geocoding-service:50055
+      POI_SERVICE_URL: poi-service:50056
+      OSRM_BASE_URL: http://osrm:5000
+      TWOGIS_API_KEY: ${TWOGIS_API_KEY:-}
+      TWOGIS_LOCALE: ru_RU
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      embedding-service:
+        condition: service_started
+      ranking-service:
+        condition: service_started
+      route-planner-service:
+        condition: service_started
+      llm-service:
+        condition: service_started
+      geocoding-service:
+        condition: service_started
+      poi-service:
+        condition: service_started
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    networks:
+      - ai-tourist
+    restart: unless-stopped
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
       target: development
-    container_name: aitourist-frontend
+    container_name: ai-tourist-frontend
     environment:
       VITE_API_URL: http://localhost:8000
     volumes:
@@ -80,17 +185,36 @@ services:
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      api-gateway:
+        condition: service_started
     networks:
-      - aitourist-network
+      - ai-tourist
     restart: unless-stopped
-    command: npm run dev -- --host 0.0.0.0
+
+  poi-loader:
+    build:
+      context: .
+      dockerfile: services/poi-service/Dockerfile
+    command: ["python", "scripts/load_pois.py"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ai_tourist:ai_tourist@postgres:5432/ai_tourist
+      EMBEDDING_SERVICE_ADDR: embedding-service:50051
+      EMBEDDING_USE_CACHE: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      embedding-service:
+        condition: service_started
+    volumes:
+      - ./data:/app/data:ro
+    networks:
+      - ai-tourist
+    profiles: ["tools"]
 
 networks:
-  aitourist-network:
+  ai-tourist:
     driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
-  backend_cache:
