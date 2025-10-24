@@ -1,19 +1,28 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 ENV_FILE="${1:-.env}"
 OUTPUT_FILE="${2:-.env.yaml}"
+HELM_SECRETS_FILE="helm/ai-tourist/secrets.yaml"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "❌ .env file not found at ${ENV_FILE}!"
   exit 1
 fi
 
-echo "📝 Converting ${ENV_FILE} to ${OUTPUT_FILE}..."
+if [[ ! -d "$(dirname "${HELM_SECRETS_FILE}")" ]]; then
+  echo "❌ Helm chart directory not found at $(dirname "${HELM_SECRETS_FILE}")"
+  exit 1
+fi
 
-set -a
-source "${ENV_FILE}"
-set +a
+source_env() {
+  set -a
+  # shellcheck source=/dev/null
+  source "${ENV_FILE}"
+  set +a
+}
+
+source_env
 
 required_vars=(DB_PASSWORD TWOGIS_API_KEY JWT_SECRET_KEY ENCRYPTION_KEY)
 missing=()
@@ -35,7 +44,7 @@ fi
 validate_positive_integer() {
   local name="$1"
   local value="$2"
-  if [[ ! "${value}" =~ ^[0-9]+$ ]]; then
+  if [[ -n "${value}" && ! "${value}" =~ ^[0-9]+$ ]]; then
     echo "❌ ${name} must be a positive integer (got '${value}')"
     exit 1
   fi
@@ -57,6 +66,13 @@ normalize_bool() {
   esac
 }
 
+yaml_escape() {
+  local value="${1:-}"
+  value="${value//\\/\\\\}"
+  value="${value//"/\\"}"
+  printf '%s' "${value}"
+}
+
 validate_positive_integer "FRONTEND_REPLICAS" "${FRONTEND_REPLICAS:-2}"
 validate_positive_integer "API_GATEWAY_REPLICAS" "${API_GATEWAY_REPLICAS:-2}"
 validate_positive_integer "EMBEDDING_REPLICAS" "${EMBEDDING_REPLICAS:-2}"
@@ -73,134 +89,156 @@ REDIS_ENABLED_VALUE="$(normalize_bool "REDIS_ENABLED" "${REDIS_ENABLED:-true}")"
 REDIS_PERSISTENCE_ENABLED_VALUE="$(normalize_bool "REDIS_PERSISTENCE_ENABLED" "${REDIS_PERSISTENCE_ENABLED:-true}")"
 INGRESS_ENABLED_VALUE="$(normalize_bool "INGRESS_ENABLED" "${INGRESS_ENABLED:-true}")"
 
+cat > "${OUTPUT_FILE}" <<EOF_YAML
+secrets:
+  dbPassword: "$(yaml_escape "${DB_PASSWORD}")"
+  openaiApiKey: "$(yaml_escape "${OPENAI_API_KEY:-}")"
+  anthropicApiKey: "$(yaml_escape "${ANTHROPIC_API_KEY:-}")"
+  twogisApiKey: "$(yaml_escape "${TWOGIS_API_KEY}")"
+  jwtSecret: "$(yaml_escape "${JWT_SECRET_KEY}")"
+  encryptionKey: "$(yaml_escape "${ENCRYPTION_KEY}")"
+
 frontend:
   replicas: ${FRONTEND_REPLICAS:-2}
   image:
-    tag: "${FRONTEND_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${FRONTEND_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${FRONTEND_MEMORY_REQUEST:-128Mi}"
-      cpu: "${FRONTEND_CPU_REQUEST:-100m}"
+      memory: "$(yaml_escape "${FRONTEND_MEMORY_REQUEST:-128Mi}")"
+      cpu: "$(yaml_escape "${FRONTEND_CPU_REQUEST:-100m}")"
     limits:
-      memory: "${FRONTEND_MEMORY_LIMIT:-256Mi}"
-      cpu: "${FRONTEND_CPU_LIMIT:-200m}"
+      memory: "$(yaml_escape "${FRONTEND_MEMORY_LIMIT:-256Mi}")"
+      cpu: "$(yaml_escape "${FRONTEND_CPU_LIMIT:-200m}")"
 
 apiGateway:
   replicas: ${API_GATEWAY_REPLICAS:-2}
   image:
-    tag: "${API_GATEWAY_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${API_GATEWAY_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${API_GATEWAY_MEMORY_REQUEST:-256Mi}"
-      cpu: "${API_GATEWAY_CPU_REQUEST:-200m}"
+      memory: "$(yaml_escape "${API_GATEWAY_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${API_GATEWAY_CPU_REQUEST:-200m}")"
     limits:
-      memory: "${API_GATEWAY_MEMORY_LIMIT:-512Mi}"
-      cpu: "${API_GATEWAY_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${API_GATEWAY_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${API_GATEWAY_CPU_LIMIT:-500m}")"
 
 embeddingService:
   replicas: ${EMBEDDING_REPLICAS:-2}
   image:
-    tag: "${EMBEDDING_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${EMBEDDING_IMAGE_TAG:-latest}")"
   batchSize: ${EMBEDDING_BATCH_SIZE:-32}
-  model: "${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}"
+  model: "$(yaml_escape "${EMBEDDING_MODEL:-sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2}")"
   resources:
     requests:
-      memory: "${EMBEDDING_MEMORY_REQUEST:-512Mi}"
-      cpu: "${EMBEDDING_CPU_REQUEST:-500m}"
+      memory: "$(yaml_escape "${EMBEDDING_MEMORY_REQUEST:-512Mi}")"
+      cpu: "$(yaml_escape "${EMBEDDING_CPU_REQUEST:-500m}")"
     limits:
-      memory: "${EMBEDDING_MEMORY_LIMIT:-1Gi}"
-      cpu: "${EMBEDDING_CPU_LIMIT:-1000m}"
+      memory: "$(yaml_escape "${EMBEDDING_MEMORY_LIMIT:-1Gi}")"
+      cpu: "$(yaml_escape "${EMBEDDING_CPU_LIMIT:-1000m}")"
 
 rankingService:
   replicas: ${RANKING_REPLICAS:-2}
   image:
-    tag: "${RANKING_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${RANKING_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${RANKING_MEMORY_REQUEST:-256Mi}"
-      cpu: "${RANKING_CPU_REQUEST:-200m}"
+      memory: "$(yaml_escape "${RANKING_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${RANKING_CPU_REQUEST:-200m}")"
     limits:
-      memory: "${RANKING_MEMORY_LIMIT:-512Mi}"
-      cpu: "${RANKING_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${RANKING_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${RANKING_CPU_LIMIT:-500m}")"
 
 routePlannerService:
   replicas: ${ROUTE_PLANNER_REPLICAS:-2}
   image:
-    tag: "${ROUTE_PLANNER_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${ROUTE_PLANNER_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${ROUTE_PLANNER_MEMORY_REQUEST:-256Mi}"
-      cpu: "${ROUTE_PLANNER_CPU_REQUEST:-200m}"
+      memory: "$(yaml_escape "${ROUTE_PLANNER_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${ROUTE_PLANNER_CPU_REQUEST:-200m}")"
     limits:
-      memory: "${ROUTE_PLANNER_MEMORY_LIMIT:-512Mi}"
-      cpu: "${ROUTE_PLANNER_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${ROUTE_PLANNER_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${ROUTE_PLANNER_CPU_LIMIT:-500m}")"
 
 llmService:
   replicas: ${LLM_SERVICE_REPLICAS:-1}
   image:
-    tag: "${LLM_SERVICE_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${LLM_SERVICE_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${LLM_SERVICE_MEMORY_REQUEST:-256Mi}"
-      cpu: "${LLM_SERVICE_CPU_REQUEST:-200m}"
+      memory: "$(yaml_escape "${LLM_SERVICE_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${LLM_SERVICE_CPU_REQUEST:-200m}")"
     limits:
-      memory: "${LLM_SERVICE_MEMORY_LIMIT:-512Mi}"
-      cpu: "${LLM_SERVICE_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${LLM_SERVICE_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${LLM_SERVICE_CPU_LIMIT:-500m}")"
 
 geocodingService:
   replicas: ${GEOCODING_REPLICAS:-1}
   image:
-    tag: "${GEOCODING_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${GEOCODING_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${GEOCODING_MEMORY_REQUEST:-128Mi}"
-      cpu: "${GEOCODING_CPU_REQUEST:-100m}"
+      memory: "$(yaml_escape "${GEOCODING_MEMORY_REQUEST:-128Mi}")"
+      cpu: "$(yaml_escape "${GEOCODING_CPU_REQUEST:-100m}")"
     limits:
-      memory: "${GEOCODING_MEMORY_LIMIT:-256Mi}"
-      cpu: "${GEOCODING_CPU_LIMIT:-200m}"
+      memory: "$(yaml_escape "${GEOCODING_MEMORY_LIMIT:-256Mi}")"
+      cpu: "$(yaml_escape "${GEOCODING_CPU_LIMIT:-200m}")"
 
 poiService:
   replicas: ${POI_REPLICAS:-1}
   image:
-    tag: "${POI_IMAGE_TAG:-latest}"
+    tag: "$(yaml_escape "${POI_IMAGE_TAG:-latest}")"
   resources:
     requests:
-      memory: "${POI_MEMORY_REQUEST:-256Mi}"
-      cpu: "${POI_CPU_REQUEST:-200m}"
+      memory: "$(yaml_escape "${POI_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${POI_CPU_REQUEST:-200m}")"
     limits:
-      memory: "${POI_MEMORY_LIMIT:-512Mi}"
-      cpu: "${POI_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${POI_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${POI_CPU_LIMIT:-500m}")"
 
 postgresql:
   enabled: ${POSTGRESQL_ENABLED_VALUE}
   image:
-    tag: "${POSTGRESQL_IMAGE_TAG:-16-alpine}"
+    tag: "$(yaml_escape "${POSTGRESQL_IMAGE_TAG:-16-alpine}")"
   persistence:
     enabled: ${POSTGRESQL_PERSISTENCE_ENABLED_VALUE}
-    size: "${POSTGRESQL_STORAGE_SIZE:-1Gi}"
+    size: "$(yaml_escape "${POSTGRESQL_STORAGE_SIZE:-1Gi}")"
   resources:
     requests:
-      memory: "${POSTGRESQL_MEMORY_REQUEST:-256Mi}"
-      cpu: "${POSTGRESQL_CPU_REQUEST:-250m}"
+      memory: "$(yaml_escape "${POSTGRESQL_MEMORY_REQUEST:-256Mi}")"
+      cpu: "$(yaml_escape "${POSTGRESQL_CPU_REQUEST:-250m}")"
     limits:
-      memory: "${POSTGRESQL_MEMORY_LIMIT:-512Mi}"
-      cpu: "${POSTGRESQL_CPU_LIMIT:-500m}"
+      memory: "$(yaml_escape "${POSTGRESQL_MEMORY_LIMIT:-512Mi}")"
+      cpu: "$(yaml_escape "${POSTGRESQL_CPU_LIMIT:-500m}")"
 
 redis:
   enabled: ${REDIS_ENABLED_VALUE}
   image:
-    tag: "${REDIS_IMAGE_TAG:-7-alpine}"
+    tag: "$(yaml_escape "${REDIS_IMAGE_TAG:-7-alpine}")"
   persistence:
     enabled: ${REDIS_PERSISTENCE_ENABLED_VALUE}
-    size: "${REDIS_STORAGE_SIZE:-1Gi}"
+    size: "$(yaml_escape "${REDIS_STORAGE_SIZE:-1Gi}")"
   resources:
     requests:
-      memory: "${REDIS_MEMORY_REQUEST:-128Mi}"
-      cpu: "${REDIS_CPU_REQUEST:-100m}"
+      memory: "$(yaml_escape "${REDIS_MEMORY_REQUEST:-128Mi}")"
+      cpu: "$(yaml_escape "${REDIS_CPU_REQUEST:-100m}")"
     limits:
-      memory: "${REDIS_MEMORY_LIMIT:-256Mi}"
-      cpu: "${REDIS_CPU_LIMIT:-200m}"
+      memory: "$(yaml_escape "${REDIS_MEMORY_LIMIT:-256Mi}")"
+      cpu: "$(yaml_escape "${REDIS_CPU_LIMIT:-200m}")"
 
 ingress:
   enabled: ${INGRESS_ENABLED_VALUE}
-  className: "${INGRESS_CLASS:-nginx}"
+  className: "$(yaml_escape "${INGRESS_CLASS:-nginx}")"
+EOF_YAML
+
+cat > "${HELM_SECRETS_FILE}" <<EOF_HELM
+secrets:
+  dbPassword: "$(yaml_escape "${DB_PASSWORD}")"
+  openaiApiKey: "$(yaml_escape "${OPENAI_API_KEY:-}")"
+  anthropicApiKey: "$(yaml_escape "${ANTHROPIC_API_KEY:-}")"
+  twogisApiKey: "$(yaml_escape "${TWOGIS_API_KEY}")"
+  jwtSecret: "$(yaml_escape "${JWT_SECRET_KEY}")"
+  encryptionKey: "$(yaml_escape "${ENCRYPTION_KEY}")"
+EOF_HELM
+
+echo "✅ Generated ${OUTPUT_FILE} and ${HELM_SECRETS_FILE}"
