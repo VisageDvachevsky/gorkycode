@@ -777,7 +777,7 @@ http://ai-tourist.local
 > 🔧 **Альтернатива без hosts:**
 > Если изменить файл hosts нельзя, используйте port-forward:
 > ```bash
-> kubectl port-forward -n ai-tourist svc/ai-tourist-frontend 8080:80
+> make port-forward в корне репозитория
 > ```
 > Затем откройте: `http://localhost:8080`
 
