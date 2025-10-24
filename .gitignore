@@ -18,3 +18,4 @@ helm/*/values-dev.yaml
 /.venv
 /frontend/dist
 helm/ai-tourist/values.yaml
+helm/ai-tourist/secrets.yaml
