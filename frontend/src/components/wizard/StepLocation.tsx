@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { MapPin, Navigation, Search } from 'lucide-react'
+import { MapPin, Navigation, Search, AlertCircle } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import type { RouteRequest } from '../../types'
 import 'leaflet/dist/leaflet.css'
@@ -38,9 +38,13 @@ function LocationPicker({ onLocationSelect }: { onLocationSelect: (lat: number, 
 export default function StepLocation({ formData, updateFormData }: Props) {
   const [locationMode, setLocationMode] = useState<LocationMode>('address')
   const [geoStatus, setGeoStatus] = useState<'idle' | 'locating' | 'success' | 'error'>('idle')
+  const [geoError, setGeoError] = useState<string>('')
 
   const handleModeChange = (mode: LocationMode) => {
     setLocationMode(mode)
+    setGeoStatus('idle')
+    setGeoError('')
+    
     if (mode === 'address') {
       updateFormData({ start_lat: undefined, start_lon: undefined })
     } else {
@@ -55,20 +59,50 @@ export default function StepLocation({ formData, updateFormData }: Props) {
   const locateUser = () => {
     if (!navigator.geolocation) {
       setGeoStatus('error')
+      setGeoError('Ваш браузер не поддерживает геолокацию')
       return
     }
+
     setGeoStatus('locating')
+    setGeoError('')
+
     navigator.geolocation.getCurrentPosition(
-      position => {
+      (position) => {
         const { latitude, longitude } = position.coords
-        updateFormData({ start_lat: latitude, start_lon: longitude, start_address: undefined })
+        updateFormData({ 
+          start_lat: latitude, 
+          start_lon: longitude, 
+          start_address: undefined 
+        })
         setLocationMode('map')
         setGeoStatus('success')
+        setGeoError('')
       },
-      () => {
+      (error) => {
         setGeoStatus('error')
+        let errorMessage = 'Не удалось определить местоположение'
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Доступ к геолокации запрещён. Разрешите доступ в настройках браузера'
+            break
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Информация о местоположении недоступна'
+            break
+          case error.TIMEOUT:
+            errorMessage = 'Истекло время ожидания. Попробуйте снова'
+            break
+          default:
+            errorMessage = `Ошибка геолокации: ${error.message}`
+        }
+        
+        setGeoError(errorMessage)
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
     )
   }
 
@@ -95,15 +129,40 @@ export default function StepLocation({ formData, updateFormData }: Props) {
           <button
             type="button"
             onClick={locateUser}
-            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold shadow-lg hover:shadow-emerald-300/50 transition-transform hover:-translate-y-0.5"
+            disabled={geoStatus === 'locating'}
+            className="hide-geolocation-btn inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold shadow-lg hover:shadow-emerald-300/50 transition-transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
-            <Navigation className="w-4 h-4" />
-            Определить автоматически
+            <Navigation className={`w-4 h-4 ${geoStatus === 'locating' ? 'animate-pulse' : ''}`} />
+            {geoStatus === 'locating' ? 'Определяем...' : 'Определить автоматически'}
           </button>
-          {geoStatus === 'locating' && <span className="text-sm text-slate-500">Определяем текущее местоположение...</span>}
-          {geoStatus === 'error' && <span className="text-sm text-red-500">Не удалось определить позицию</span>}
-          {geoStatus === 'success' && <span className="text-sm text-emerald-600">Позиция обновлена</span>}
         </div>
+        
+        {geoStatus === 'success' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="hide-geolocation-btn mt-3 flex items-center justify-center gap-2 text-sm text-emerald-600 dark:text-emerald-400"
+          >
+            <span className="text-lg">✓</span>
+            <span className="font-medium">Местоположение определено</span>
+          </motion.div>
+        )}
+        
+        {geoStatus === 'error' && geoError && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="hide-geolocation-btn mt-3 mx-auto max-w-md"
+          >
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-left">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-red-800 font-medium">Ошибка геолокации</p>
+                <p className="text-xs text-red-600 mt-1">{geoError}</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -120,7 +179,7 @@ export default function StepLocation({ formData, updateFormData }: Props) {
               transition={{ delay: index * 0.1 }}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className={`p-5 rounded-xl font-semibold transition-all ${
+              className={`p-5 rounded-xl font-semibold transition-all touch-manipulation ${
                 isSelected
                   ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border-2 border-slate-200 dark:border-slate-700'

@@ -13,15 +13,30 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
   }
 
   html {
     scroll-behavior: smooth;
+    overscroll-behavior: none;
   }
-}
 
-.leaflet-attribution-flag {
-  display: none !important;
+  html, body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  #root {
+    min-height: 100vh;
+    position: relative;
+  }
+
+  @supports (font: -apple-system-body) {
+    body {
+      font: -apple-system-body;
+    }
+  }
 }
 
 @layer utilities {
@@ -230,8 +245,8 @@
 
   
   ::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
@@ -240,7 +255,7 @@
 
   ::-webkit-scrollbar-thumb {
     @apply bg-slate-300 dark:bg-slate-600 rounded-full;
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     background-clip: padding-box;
   }
 
@@ -270,12 +285,42 @@
   }
 
   
-  .leaflet-popup-content-wrapper {
-    @apply rounded-2xl shadow-2xl border-2 border-slate-200 dark:border-slate-700;
+  .leaflet-container {
+    font-family: inherit;
   }
 
-  .leaflet-popup-tip {
+  .leaflet-popup-content-wrapper {
+    @apply rounded-2xl shadow-2xl border-2 border-emerald-200 dark:border-emerald-700;
+    padding: 0 !important;
+  }
+
+  .leaflet-popup-content {
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .leaflet-popup-tip-container {
     @apply hidden;
+  }
+
+  .leaflet-popup-close-button {
+    @apply text-slate-600 hover:text-slate-900;
+    font-size: 24px !important;
+    padding: 8px 12px !important;
+    width: auto !important;
+    height: auto !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 10;
+  }
+
+  .leaflet-popup-close-button:hover {
+    @apply bg-slate-100 rounded-full;
+  }
+
+  .mobile-friendly-popup .leaflet-popup-close-button {
+    padding: 12px !important;
+    font-size: 28px !important;
   }
 
   .leaflet-marker-icon {
@@ -284,6 +329,57 @@
 
   .leaflet-marker-icon:hover {
     @apply scale-110 z-50;
+  }
+
+  .leaflet-control-zoom {
+    border: 2px solid #d1fae5 !important;
+    border-radius: 12px !important;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .leaflet-control-zoom a {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 20px !important;
+    border: none !important;
+    background: white !important;
+    color: #059669 !important;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: #d1fae5 !important;
+  }
+
+  
+  .leaflet-attribution-flag {
+    display: none !important;
+  }
+
+  .leaflet-control-attribution svg {
+    display: none !important;
+  }
+
+  .leaflet-control-attribution a[href*="ukraine"] {
+    display: none !important;
+  }
+
+  @media (max-width: 640px) {
+    .leaflet-control-zoom {
+      margin: 12px !important;
+    }
+
+    .leaflet-control-zoom a {
+      width: 44px !important;
+      height: 44px !important;
+      line-height: 44px !important;
+      font-size: 24px !important;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-width: 1px;
+    }
   }
 
   
@@ -370,20 +466,57 @@
   .text-fluid-base {
     font-size: clamp(1rem, 2vw, 1.25rem);
   }
+
+  
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  
+  @media (max-width: 640px) {
+    button, a, input, select, textarea {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Hide geolocation button for HTTP sites */
+  .hide-geolocation-btn {
+    display: none !important;
+  }
 }
 
 @layer components {
   
   .btn-primary {
-    @apply px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all;
+    @apply px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all touch-manipulation;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg transition-all;
+    @apply px-6 py-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg transition-all touch-manipulation;
   }
 
   .btn-ghost {
-    @apply px-4 py-2 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all;
+    @apply px-4 py-2 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-all touch-manipulation;
   }
 
   
@@ -397,7 +530,7 @@
   }
 
   .card-hover {
-    @apply card hover:shadow-2xl hover:-translate-y-1;
+    @apply card hover:shadow-2xl hover:-translate-y-1 touch-manipulation;
   }
 
   
@@ -415,5 +548,30 @@
 
   .badge-warning {
     @apply badge bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :root {
+    --hover-scale: 1;
+  }
+
+  .hover\:scale-105:hover {
+    transform: scale(1);
+  }
+
+  .hover\:-translate-y-1:hover {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

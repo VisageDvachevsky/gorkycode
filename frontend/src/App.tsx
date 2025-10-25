@@ -136,6 +136,18 @@ function App() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
+    window.scrollTo(0, 0)
+    
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+  }, [])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [appState])
+
+  useEffect(() => {
     let isActive = true
     const params = new URLSearchParams(window.location.search)
     const shareToken = params.get('share')
@@ -147,6 +159,7 @@ function App() {
       if (restored && isActive) {
         setRoute(restored)
         setAppState('viewing')
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' }), 100)
       }
     }
 
@@ -157,6 +170,7 @@ function App() {
           if (!isActive) return
           setRoute(sharedRoute)
           setAppState('viewing')
+          setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' }), 100)
         } catch (error) {
           console.error('Failed to load shared route', error)
           if (isActive) {
@@ -194,21 +208,25 @@ function App() {
 
   const handleStartJourney = () => {
     setAppState('wizard')
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
 
   const handleRouteGenerated = (newRoute: RouteResponse) => {
     setRoute(newRoute)
     setAppState('viewing')
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
 
   const handleNewRoute = () => {
     setRoute(null)
     setAppState('wizard')
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
 
   const handleBackToHero = () => {
     setRoute(null)
     setAppState('hero')
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
 
   return (

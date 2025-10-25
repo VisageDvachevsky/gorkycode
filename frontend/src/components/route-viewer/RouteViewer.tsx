@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Home, Share2, Printer, MapIcon, List, Sparkles, Coffee } from 'lucide-react'
+import { Home, Share2, MapIcon, List, Sparkles, Coffee, Menu, X } from 'lucide-react'
 import type { RouteResponse } from '../../types'
 import MapView from './MapView'
 import ListView from './ListView'
@@ -32,6 +32,7 @@ export default function RouteViewer({ route, onNewRoute, onBackToHero }: Props) 
   const [expandedPoi, setExpandedPoi] = useState<number | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [activePoi, setActivePoi] = useState<number | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const timelineRef = useRef<HTMLDivElement>(null)
 
   const geometry = useMemo(() => resolveGeometry(route), [route])
@@ -97,6 +98,8 @@ export default function RouteViewer({ route, onNewRoute, onBackToHero }: Props) 
         title: 'Мой маршрут по Нижнему Новгороду',
         text: route.summary,
         url: window.location.href,
+      }).catch(() => {
+        setShowShareModal(true)
       })
       return
     }
@@ -114,55 +117,53 @@ export default function RouteViewer({ route, onNewRoute, onBackToHero }: Props) 
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-white/90 backdrop-blur-lg border-b border-emerald-100 sticky top-0 z-50 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+      <header className="bg-white/95 backdrop-blur-lg border-b border-emerald-100 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
                 onClick={onBackToHero}
-                className="p-2 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="p-2 hover:bg-emerald-50 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
                 title="На главную"
               >
-                <Home className="w-5 h-5 text-slate-600" />
+                <Home className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
               </button>
-              <div className="h-6 w-px bg-emerald-100" />
-              <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-emerald-500" />
-                  <h1 className="text-xl font-bold text-slate-900">
-                    Ваш маршрут готов!
+              <div className="h-5 w-px bg-emerald-100 flex-shrink-0 hidden sm:block" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 flex-shrink-0" />
+                  <h1 className="text-sm sm:text-lg md:text-xl font-bold text-slate-900 truncate">
+                    Ваш маршрут
                   </h1>
                 </div>
-                <p className="text-xs text-slate-600 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5 truncate">
                   {route.route.length} точек • {hours > 0 && `${hours}ч `}
-                  {minutes}м • {route.total_distance_km.toFixed(1)} км • {coffeeBreaksCount}{' '}
-                  <span className="inline-flex items-center gap-1">
-                    <Coffee className="w-3 h-3" />
-                    перерывов
-                  </span>
+                  {minutes}м • {route.total_distance_km.toFixed(1)} км
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <div className="hidden sm:flex items-center gap-1 p-1 bg-emerald-50 rounded-lg">
                 <button
                   onClick={() => setView('map')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  className={`p-1.5 sm:p-2 rounded-md text-sm font-medium transition-all touch-manipulation ${
                     view === 'map'
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="Карта"
                 >
                   <MapIcon className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setView('list')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  className={`p-1.5 sm:p-2 rounded-md text-sm font-medium transition-all touch-manipulation ${
                     view === 'list'
                       ? 'bg-white text-slate-900 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
+                  title="Список"
                 >
                   <List className="w-4 h-4" />
                 </button>
@@ -170,40 +171,102 @@ export default function RouteViewer({ route, onNewRoute, onBackToHero }: Props) 
 
               <button
                 onClick={handleShare}
-                className="p-2 hover:bg-emerald-50 rounded-lg transition-colors"
+                className="p-2 hover:bg-emerald-50 rounded-lg transition-colors touch-manipulation"
                 title="Поделиться"
               >
-                <Share2 className="w-5 h-5 text-slate-600" />
+                <Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
               </button>
+
               <button
-                onClick={() => window.print()}
-                className="hidden sm:block p-2 hover:bg-emerald-50 rounded-lg transition-colors"
-                title="Печать"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="sm:hidden p-2 hover:bg-emerald-50 rounded-lg transition-colors touch-manipulation"
+                title="Меню"
               >
-                <Printer className="w-5 h-5 text-slate-600" />
+                {mobileMenuOpen ? (
+                  <X className="w-5 h-5 text-slate-600" />
+                ) : (
+                  <Menu className="w-5 h-5 text-slate-600" />
+                )}
               </button>
+
               <button
                 onClick={onNewRoute}
-                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all"
+                className="hidden sm:flex px-3 py-2 bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold rounded-lg hover:shadow-lg transition-all text-sm touch-manipulation"
               >
                 Новый маршрут
               </button>
             </div>
           </div>
+
+          <AnimatePresence>
+            {mobileMenuOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="sm:hidden overflow-hidden"
+              >
+                <div className="pt-3 pb-2 space-y-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setView('map')
+                        setMobileMenuOpen(false)
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all touch-manipulation ${
+                        view === 'map'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-emerald-50 text-slate-700'
+                      }`}
+                    >
+                      <MapIcon className="w-4 h-4" />
+                      Карта
+                    </button>
+                    <button
+                      onClick={() => {
+                        setView('list')
+                        setMobileMenuOpen(false)
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all touch-manipulation ${
+                        view === 'list'
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-emerald-50 text-slate-700'
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                      Список
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      onNewRoute()
+                      setMobileMenuOpen(false)
+                    }}
+                    className="w-full px-4 py-3 bg-gradient-to-r from-emerald-500 to-sky-500 text-white font-semibold rounded-lg touch-manipulation"
+                  >
+                    Создать новый маршрут
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
       <main className="flex-1">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-          <RouteShareCard
-            title={route.summary}
-            distance={route.total_distance_km}
-            durationMinutes={route.total_est_minutes}
-            shareUrl={shareUrl}
-            weatherAdvice={route.weather_advice}
-          />
-          <ItineraryTimeline entries={timelineEntries} onHover={handleTimelineHover} />
-        </div>
+        {view === 'list' && (
+          <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+            <RouteShareCard
+              title={route.summary}
+              distance={route.total_distance_km}
+              durationMinutes={route.total_est_minutes}
+              shareUrl={shareUrl}
+              weatherAdvice={route.weather_advice}
+            />
+            <ItineraryTimeline entries={timelineEntries} onHover={handleTimelineHover} />
+          </div>
+        )}
+        
         <AnimatePresence mode="wait">
           {view === 'map' ? (
             <motion.div
@@ -227,7 +290,7 @@ export default function RouteViewer({ route, onNewRoute, onBackToHero }: Props) 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="max-w-5xl mx-auto px-4 sm:px-6 py-8"
+              className="max-w-5xl mx-auto px-3 sm:px-4 md:px-6 pb-8"
             >
               <ListView
                 route={route}
