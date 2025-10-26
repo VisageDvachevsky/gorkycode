@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { MapPin, Navigation, Search, AlertCircle } from 'lucide-react'
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
@@ -31,6 +31,21 @@ function LocationPicker({ onLocationSelect }: { onLocationSelect: (lat: number, 
       onLocationSelect(lat, lng)
     },
   })
+
+  useEffect(() => {
+    const removeFlag = () => {
+      const flags = document.querySelectorAll('.leaflet-attribution-flag, svg.leaflet-attribution-flag')
+      flags.forEach(flag => flag.remove())
+      
+      const attributionSvgs = document.querySelectorAll('.leaflet-control-attribution svg')
+      attributionSvgs.forEach(svg => svg.remove())
+    }
+
+    removeFlag()
+    const interval = setInterval(removeFlag, 500)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return <Marker position={position} />
 }

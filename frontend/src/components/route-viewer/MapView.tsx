@@ -22,6 +22,21 @@ const MapBoundsAdjuster = ({ geometry }: { geometry: [number, number][] }) => {
     map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
   }, [geometry, map])
 
+  useEffect(() => {
+    const removeFlag = () => {
+      const flags = document.querySelectorAll('.leaflet-attribution-flag, svg.leaflet-attribution-flag')
+      flags.forEach(flag => flag.remove())
+      
+      const attributionSvgs = document.querySelectorAll('.leaflet-control-attribution svg')
+      attributionSvgs.forEach(svg => svg.remove())
+    }
+
+    removeFlag()
+    const interval = setInterval(removeFlag, 500)
+
+    return () => clearInterval(interval)
+  }, [])
+
   return null
 }
 
