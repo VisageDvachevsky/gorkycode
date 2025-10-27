@@ -19,30 +19,42 @@ setup-ingress:
 	@sleep 5
 
 build:
-	@echo "$(YELLOW)Building Docker images...$(NC)"
-	@if command -v docker >/dev/null 2>&1; then \
-		echo "$(YELLOW)Using docker CLI via minikube docker-env$(NC)"; \
-		eval $$(minikube docker-env) && \
-		docker build -t ai-tourist-api-gateway:latest -f services/api-gateway/Dockerfile . && \
-		docker build -t ai-tourist-embedding-service:latest -f services/embedding-service/Dockerfile . && \
-		docker build -t ai-tourist-poi-service:latest -f services/poi-service/Dockerfile . && \
-		docker build -t ai-tourist-ranking-service:latest -f services/ranking-service/Dockerfile . && \
-		docker build -t ai-tourist-route-planner-service:latest -f services/route-planner-service/Dockerfile . && \
-		docker build -t ai-tourist-llm-service:latest -f services/llm-service/Dockerfile . && \
-		docker build -t ai-tourist-geocoding-service:latest -f services/geocoding-service/Dockerfile . && \
-		docker build -t ai-tourist-frontend:latest frontend; \
-	else \
-		echo "$(YELLOW)Docker CLI not found — falling back to 'minikube image build'.$(NC)"; \
-		minikube image build -t ai-tourist-api-gateway:latest -f services/api-gateway/Dockerfile . && \
-		minikube image build -t ai-tourist-embedding-service:latest -f services/embedding-service/Dockerfile . && \
-		minikube image build -t ai-tourist-poi-service:latest -f services/poi-service/Dockerfile . && \
-		minikube image build -t ai-tourist-ranking-service:latest -f services/ranking-service/Dockerfile . && \
-		minikube image build -t ai-tourist-route-planner-service:latest -f services/route-planner-service/Dockerfile . && \
-		minikube image build -t ai-tourist-llm-service:latest -f services/llm-service/Dockerfile . && \
-		minikube image build -t ai-tourist-geocoding-service:latest -f services/geocoding-service/Dockerfile . && \
-		minikube image build -t ai-tourist-frontend:latest frontend; \
-	fi
-	@echo "$(GREEN)✅ All images built successfully$(NC)"
+        @echo "$(YELLOW)Building Docker images...$(NC)"
+        @if command -v docker >/dev/null 2>&1; then \
+                if command -v minikube >/dev/null 2>&1 && minikube status --format '{{.Host}}' 2>/dev/null | grep -qi running; then \
+                        echo "$(YELLOW)Using docker CLI via minikube docker-env$(NC)"; \
+                        eval $$(minikube docker-env) && \
+                        docker build -t ai-tourist-api-gateway:latest -f services/api-gateway/Dockerfile . && \
+                        docker build -t ai-tourist-embedding-service:latest -f services/embedding-service/Dockerfile . && \
+                        docker build -t ai-tourist-poi-service:latest -f services/poi-service/Dockerfile . && \
+                        docker build -t ai-tourist-ranking-service:latest -f services/ranking-service/Dockerfile . && \
+                        docker build -t ai-tourist-route-planner-service:latest -f services/route-planner-service/Dockerfile . && \
+                        docker build -t ai-tourist-llm-service:latest -f services/llm-service/Dockerfile . && \
+                        docker build -t ai-tourist-geocoding-service:latest -f services/geocoding-service/Dockerfile . && \
+                        docker build -t ai-tourist-frontend:latest frontend; \
+                else \
+                        echo "$(YELLOW)Using local docker daemon$(NC)"; \
+                        docker build -t ai-tourist-api-gateway:latest -f services/api-gateway/Dockerfile . && \
+                        docker build -t ai-tourist-embedding-service:latest -f services/embedding-service/Dockerfile . && \
+                        docker build -t ai-tourist-poi-service:latest -f services/poi-service/Dockerfile . && \
+                        docker build -t ai-tourist-ranking-service:latest -f services/ranking-service/Dockerfile . && \
+                        docker build -t ai-tourist-route-planner-service:latest -f services/route-planner-service/Dockerfile . && \
+                        docker build -t ai-tourist-llm-service:latest -f services/llm-service/Dockerfile . && \
+                        docker build -t ai-tourist-geocoding-service:latest -f services/geocoding-service/Dockerfile . && \
+                        docker build -t ai-tourist-frontend:latest frontend; \
+                fi; \
+        else \
+                echo "$(YELLOW)Docker CLI not found — falling back to 'minikube image build'.$(NC)"; \
+                minikube image build -t ai-tourist-api-gateway:latest -f services/api-gateway/Dockerfile . && \
+                minikube image build -t ai-tourist-embedding-service:latest -f services/embedding-service/Dockerfile . && \
+                minikube image build -t ai-tourist-poi-service:latest -f services/poi-service/Dockerfile . && \
+                minikube image build -t ai-tourist-ranking-service:latest -f services/ranking-service/Dockerfile . && \
+                minikube image build -t ai-tourist-route-planner-service:latest -f services/route-planner-service/Dockerfile . && \
+                minikube image build -t ai-tourist-llm-service:latest -f services/llm-service/Dockerfile . && \
+                minikube image build -t ai-tourist-geocoding-service:latest -f services/geocoding-service/Dockerfile . && \
+                minikube image build -t ai-tourist-frontend:latest frontend; \
+        fi
+        @echo "$(GREEN)✅ All images built successfully$(NC)"
 
 deploy: setup-ingress
 	@echo "$(YELLOW)Deploying to Kubernetes...$(NC)"
